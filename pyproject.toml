@@ -1,0 +1,28 @@
+[project]
+name = "graphsight"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "Neel Bauman", email = "neel.bauman@example.com" }
+]
+requires-python = ">=3.14"
+dependencies = [
+    "loguru>=0.7.3",
+    "openai>=2.15.0",
+    "pillow>=12.1.0",
+    "pydantic>=2.12.5",
+    "python-dotenv>=1.2.1",
+    "typer>=0.21.1",
+]
+
+[project.scripts]
+graphsight = "graphsight.cli:app"
+
+[build-system]
+requires = ["uv_build>=0.9.3,<0.10.0"]
+build-backend = "uv_build"
+
+[tool.pyright]
+venvPath = "."
+venv = ".venv"
