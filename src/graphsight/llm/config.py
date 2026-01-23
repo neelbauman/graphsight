@@ -26,7 +26,9 @@ MODEL_REGISTRY = {
         name="gpt-5", # 仮
         input_price_per_m=15.00,
         output_price_per_m=60.00,
-        default_params={"reasoning_effort": "medium"},
+        default_params={
+            "reasoning_effort": "high",
+        },
         excluded_params={"temperature", "max_tokens"}
     ),
 }

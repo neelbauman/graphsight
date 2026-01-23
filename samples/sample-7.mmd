@@ -1,0 +1,33 @@
+flowchart TD
+  start([Start]) --> define_job[Define job description]
+  define_job --> request_hr[Request personnel to HR]
+  request_hr --> classify_hiring[Classify job hiring]
+  classify_hiring --> regular_process{Is it a regular process?}
+  regular_process -->|Yes| create_posting[Create job posting]
+  regular_process -->|No| special_hiring[Special hiring process]
+
+  special_hiring --> review_prev[Review previous candidate]
+  create_posting --> found_suitable{Found a suitable candidate?}
+  found_suitable -->|Yes| setup_meeting[Setup a meeting with candidate]
+  found_suitable -->|No| review_prev
+
+  review_prev --> candidate_suitable{Is the candidate suitable for the job?}
+  candidate_suitable -->|Yes| setup_meeting
+  candidate_suitable -->|No| hiring_plan[Make a hiring plan]
+
+  hiring_plan --> post_online[Create job posting online]
+  post_online --> collect_resumes[Collect submitted resumes]
+  collect_resumes --> regular_process
+
+  setup_meeting --> initial_interview[Conduct initial Interview]
+  initial_interview --> list_questions[List all interview questions]
+  list_questions --> final_interview[Conduct final Interview]
+  final_interview --> reference_checked{Reference checked?}
+  reference_checked -->|Yes| shortlist[Shortlist the candidate]
+  reference_checked -->|No| end_unhired([End])
+
+  shortlist --> finalize_rate[Finalize job rate]
+  finalize_rate --> send_offer[Send job offer]
+  send_offer --> candidate_accept{Candidate accept the offer?}
+  candidate_accept -->|Yes| hire([Hire the Candidate])
+  candidate_accept -->|No| end_unhired
