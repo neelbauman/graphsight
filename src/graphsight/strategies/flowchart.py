@@ -32,8 +32,10 @@ class FlowchartStrategy(BaseStrategy):
             ## Step 1: Analyze Current Node
             - Identify text: e.g. "Check Stock"
             - **Identify SHAPE**: Is it a Diamond (Decision)? Rectangle (Process)? Circle (Start/End)?
-            - Create ID: `node_SanitizedText` (e.g., `node_Check_Stock`).
-            - **Consistency Check**: If this node likely appeared in "Context", use the SAME ID.
+            - **DETERMINE ID (Crucial)**:
+              - **Rule A (Re-visit)**: If this is the EXACT SAME node (spatially) accessed before (e.g., a loop back), reuse the existing ID found in "Context".
+              - **Rule B (Distinct)**: If this node has the same text as a previous node but is a DIFFERENT node in the diagram (different position/branch), you MUST append a unique suffix (e.g., `node_Check_Stock_2`).
+              - **Default**: `node_SanitizedText` (remove spaces/symbols).
 
             ## Step 2: Identify ALL Outgoing Connections (CRITICAL)
             - If Shape is **Diamond**: You MUST find at least 2 outgoing arrows (Yes/No, True/False).
@@ -45,7 +47,7 @@ class FlowchartStrategy(BaseStrategy):
             - Output ONE LINE per outgoing arrow.
             - Example:
               node_Check[Check] -->|Yes| node_Ship[Ship Item]
-              node_Check[Check] -->|No| node_Error[Show Error]
+              node_Check[Check] -->|No| node_Error_1[Show Error]
             - If it is an End node with no outgoing arrows, output just the node definition: `node_End[End]`.
 
             ## Step 4: List `next_focus_candidates`
@@ -80,9 +82,9 @@ class FlowchartStrategy(BaseStrategy):
         {history_text}
         
         # Constraints
-        - STRICTLY follow the `node_Text` naming convention (remove spaces/symbols).
+        - STRICTLY follow the `node_Text` naming convention, but add suffixes `_2`, `_3` if nodes are distinct.
         - Exhaustively list ALL branches (Yes, No, Else). Do NOT miss any path.
-        - If a branch goes to a node that seems to exist in Context, assume it connects to that existing node.
+        - If a branch goes to a node that seems to exist in Context, assume it connects to that existing node ONLY IF it makes sense spatially (loop). Otherwise, treat it as a new instance.
         """
         return vlm.query_structured(prompt, image_path, StepInterpretation)
 
