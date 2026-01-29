@@ -5,7 +5,7 @@ from .llm.openai_client import OpenAIVLM
 from .core.engine import GraphInterpreter
 from .strategies.flowchart import FlowchartStrategy
 from .classifier.detector import DiagramDetector
-from .models import OutputFormat, DiagramResult, DiagramType
+from .models import OutputFormat, DiagramResult
 
 load_dotenv()
 
@@ -19,15 +19,17 @@ class GraphSight:
         self.engine = GraphInterpreter(self.vlm)
         self.detector = DiagramDetector(self.vlm)
 
-    def interpret(self, image_path: str, format: str = "mermaid") -> DiagramResult:
+    def interpret(self, image_path: str, format: str = "mermaid", experimental_grid: bool = False) -> DiagramResult:
         try:
             output_fmt = OutputFormat(format)
         except ValueError:
             output_fmt = OutputFormat.MERMAID
 
+        # 同期呼び出し
         detected_type, detector_usage = self.detector.detect(image_path)
         
-        # Strategy selection
-        strategy = FlowchartStrategy(output_format=output_fmt)
+        strategy = FlowchartStrategy(output_format=output_fmt, use_grid=experimental_grid)
         
+        # 同期呼び出し
         return self.engine.process(image_path, strategy, initial_usage=detector_usage)
+

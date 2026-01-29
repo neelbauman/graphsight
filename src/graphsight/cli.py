@@ -8,13 +8,15 @@ def parse(
     image_path: str, 
     output: str = typer.Option(None, help="Output file path"),
     format: str = typer.Option("mermaid", help="'mermaid' or 'natural_language'"),
-    model: str = typer.Option("gpt-4o", help="Model to use (gpt-4o, gpt-4o-mini, gpt-5-preview...)")
+    model: str = typer.Option("gpt-4o", help="Model to use"),
+    grid: bool = typer.Option(False, "--grid", help="[Experimental] Use Grid SoM for spatial reasoning.")
 ):
     try:
         sight = GraphSight(model=model)
-        result = sight.interpret(image_path, format=format)
+        # 同期実行
+        result = sight.interpret(image_path, format=format, experimental_grid=grid)
         
-        typer.echo(f"\n✨ --- AI Refined Result ({result.output_format.value}) ---")
+        typer.echo(f"\n✨ --- AI Refined Result ---")
         typer.echo(result.content)
 
         typer.echo(f"\n🔧 --- Raw Mechanical Result ---")
@@ -35,3 +37,4 @@ def parse(
 
 if __name__ == "__main__":
     app()
+

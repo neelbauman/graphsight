@@ -2,159 +2,150 @@ from typing import List, Tuple
 from pydantic import BaseModel
 from .base import BaseStrategy, OutputFormat
 from ..llm.base import BaseVLM
+from ..llm.config import get_model_config, ModelType
 from ..models import Focus, StepInterpretation, TokenUsage
 
 class InitialFocusList(BaseModel):
     start_nodes: List[Focus]
 
 class FlowchartStrategy(BaseStrategy):
+    def __init__(self, output_format: OutputFormat = OutputFormat.MERMAID, use_grid: bool = False):
+        super().__init__(output_format)
+        self.use_grid = use_grid
+
     @property
     def mermaid_type(self) -> str:
         return "flowchart"
 
     def find_initial_focus(self, vlm: BaseVLM, image_path: str) -> Tuple[List[Focus], TokenUsage]:
+        if self.use_grid:
+            loc_instr = "3. **Location**: Provide BOTH `grid_refs` (all overlapping cells) AND `bbox` (0-1000)."
+        else:
+            loc_instr = "3. **Location**: Provide `bbox` [ymin, xmin, ymax, xmax] (0-1000)."
+        
         prompt = (
-            "Analyze this flowchart image. "
-            "Identify the 'Start' nodes or top-most nodes that initiate the process. "
-            "Return a list of these nodes with a visual description and a suggested ID (e.g., node_Start)."
+            "Analyze this flowchart to find start nodes.\n"
+            "1. Scan for 'Start' terminators.\n"
+            "2. Identify them visually.\n"
+            "3. **ID Generation**: Create a descriptive ID (e.g. `node_Start_Process`). DO NOT use generic numbers like `node_1`.\n"
+            f"{loc_instr}\n"
+            "5. Return list."
         )
         result, usage = vlm.query_structured(prompt, image_path, InitialFocusList)
         return result.start_nodes, usage
 
     def interpret_step(self, vlm: BaseVLM, image_path: str, current_focus: Focus, context_history: List[str]) -> Tuple[StepInterpretation, TokenUsage]:
-        # コンテキスト履歴（直近15件）を作成し、IDの一貫性を保つヒントにする
         history_text = "\n".join(context_history[-15:])
+        config = get_model_config(vlm.model_name)
         
-        if self.output_format == OutputFormat.MERMAID:
-            task_instruction = """
-            # TASK: Output Mermaid Code
-            
-            ## Step 1: Analyze Current Node
-            - Identify text: e.g. "Check Stock"
-            - **Identify SHAPE**: Is it a Diamond (Decision)? Rectangle (Process)? Circle (Start/End)?
-            - **DETERMINE ID (Crucial)**:
-              - **Rule A (Re-visit)**: If this is the EXACT SAME node (spatially) accessed before (e.g., a loop back), reuse the existing ID found in "Context".
-              - **Rule B (Distinct)**: If this node has the same text as a previous node but is a DIFFERENT node in the diagram (different position/branch), you MUST append a unique suffix (e.g., `node_Check_Stock_2`).
-              - **Default**: `node_SanitizedText` (remove spaces/symbols).
-
-            ## Step 2: Identify ALL Outgoing Connections (CRITICAL)
-            - If Shape is **Diamond**: You MUST find at least 2 outgoing arrows (Yes/No, True/False).
-            - Look carefully for lines exiting from bottom, right, left, or top.
-            - Trace the line to the IMMEDIATE next node.
-
-            ## Step 3: Construct `extracted_text`
-            - Format: `CURRENT_ID[Text] -->|Label| NEXT_ID[Text]`
-            - Output ONE LINE per outgoing arrow.
-            - Example:
-              node_Check[Check] -->|Yes| node_Ship[Ship Item]
-              node_Check[Check] -->|No| node_Error_1[Show Error]
-            - If it is an End node with no outgoing arrows, output just the node definition: `node_End[End]`.
-
-            ## Step 4: List `next_focus_candidates`
-            - Create a Focus item for EACH destination node found in Step 3.
-            - **Important**: You MUST fill `suggested_id` with the `NEXT_ID` you used above. This is used for loop detection.
-            """
+        # コンテキストの読み方ガイダンス
+        if self.use_grid:
+            loc_str = f"Location: Grid={current_focus.grid_refs}"
+            rules = self._build_hybrid_rules()
+            context_note = "(Note: '%% Grid: ...' in Context indicates spatial location. Use this to detect loops to existing nodes.)"
         else:
-            # 自然言語モード
-            task_instruction = f"""
-            # TASK: Output Natural Language (Japanese)
-            
-            1. Look at the focus area: "{current_focus.description}".
-            2. Read the node text and Identify the shape (Decision/Process).
-            3. **construct `extracted_text`**:
-               - Describe the logic flow in Japanese.
-               - IMPORTANT: Incorporate "how we got here" (e.g., "Yesの場合は...").
-               - If it is a Decision node, mention that a branching occurs.
-            4. `next_focus_candidates`: Describe visual location of NEXT nodes.
-            """
+            loc_str = f"Location: BBox={current_focus.bbox}"
+            rules = self._build_bbox_rules()
+            context_note = "(Note: Check '%% BBox: ...' in Context to identify if we are looping back to a visited node.)"
 
-        prompt = f"""
-        You are an expert at interpreting Flowcharts.
-        
-        # Current Focus Area
-        Target: "{current_focus.description}"
-        (Look around this area in the image)
+        if config.model_type == ModelType.REASONING:
+            prompt = self._build_reasoning_prompt(current_focus, history_text, loc_str, rules, context_note)
+        else:
+            prompt = self._build_recognition_prompt(current_focus, history_text, loc_str, rules, context_note)
 
-        # Instructions
-        {task_instruction}
-
-        # Context (Previously extracted code)
-        {history_text}
-        
-        # Constraints
-        - STRICTLY follow the `node_Text` naming convention, but add suffixes `_2`, `_3` if nodes are distinct.
-        - Exhaustively list ALL branches (Yes, No, Else). Do NOT miss any path.
-        - If a branch goes to a node that seems to exist in Context, assume it connects to that existing node ONLY IF it makes sense spatially (loop). Otherwise, treat it as a new instance.
-        """
         return vlm.query_structured(prompt, image_path, StepInterpretation)
 
+    def _build_bbox_rules(self) -> str:
+        return """
+        - **Spatial Info**: Provide `bbox` [ymin, xmin, ymax, xmax] (0-1000) for EVERY connected node.
+        """
+    
+    def _build_hybrid_rules(self) -> str:
+        return """
+        - **Dual Spatial Info**:
+          1. **grid_refs**: List **ALL** grid labels overlapping the NEXT node.
+          2. **bbox**: Also provide estimated [ymin, xmin, ymax, xmax] (0-1000).
+        """
+
+    def _build_recognition_prompt(self, current_focus: Focus, history_text: str, loc_str: str, rules: str, context_note: str) -> str:
+        return f"""
+        You are an expert Flowchart Crawler.
+        # Current Focus
+        - Description: "{current_focus.description}"
+        - ID: "{current_focus.suggested_id}"
+        - {loc_str}
+        
+        # Context
+        {history_text}
+        {context_note}
+
+        # INSTRUCTIONS
+        ## Step 1: Visual Observation
+        - Describe SHAPE and TEXT.
+        - If Diamond, find ALL branches.
+        
+        ## Step 2: Trace Arrows
+        - Trace lines physically.
+        
+        ## Step 3: Extract Connections
+        - List directly connected nodes.
+        - **ID Naming**: Use descriptive IDs based on node text (e.g. `node_Check_Stock`). 
+          - **FORBIDDEN**: Do NOT use numeric IDs (node_1, node_2) unless the text is literally a number.
+          - Consistency: If a node seems to be in the Context (same text & location), reuse that ID.
+        {rules}
+        """
+
+    def _build_reasoning_prompt(self, current_focus: Focus, history_text: str, loc_str: str, rules: str, context_note: str) -> str:
+        return f"""
+        Analyze flowchart and extract connections.
+        # Target
+        - ID: "{current_focus.suggested_id}"
+        - {loc_str}
+        # Context
+        {history_text}
+        {context_note}
+        # Goal
+        Identify every connected node.
+        # Requirements
+        1. Completeness (all branches).
+        2. Descriptive IDs (e.g. `node_Submit`). No sequential numbers.
+        3. Spatial Accuracy.
+        {rules}
+        Output strictly matching schema.
+        """
+
     def synthesize(self, vlm: BaseVLM, extracted_texts: List[str], step_history: List[StepInterpretation]) -> Tuple[str, str, TokenUsage]:
-        # 1. Mechanical Synthesis (Raw) - extracted_textsを使用
         seen = set()
         unique_lines = []
         for line in extracted_texts:
-            # 複数行のレスポンスを分解
-            sub_lines = line.split('\n')
-            for sub_line in sub_lines:
-                clean_line = sub_line.strip()
-                if clean_line and clean_line not in seen:
-                    unique_lines.append(clean_line)
-                    seen.add(clean_line)
+            clean = line.strip()
+            if clean and clean not in seen:
+                unique_lines.append(clean)
+                seen.add(clean)
 
-        # Raw Contentの作成
-        raw_content = ""
-        if self.output_format == OutputFormat.MERMAID:
-            raw_content = "graph TD\n    " + "\n    ".join(unique_lines)
-        else:
-            raw_content = "\n".join([f"- {line}" for line in unique_lines])
+        raw_content = "graph TD\n    " + "\n    ".join(unique_lines) if self.output_format == OutputFormat.MERMAID else "\n".join(unique_lines)
 
-        if not unique_lines:
-            return "", "", TokenUsage()
-
-        # 2. Build Investigation Log (AI Reasoning History)
-        # 最終的なRefinementのために、AIが辿った思考プロセスをログ化する
         investigation_log = ""
         for i, step in enumerate(step_history):
             investigation_log += f"Step {i+1}:\n"
-            investigation_log += f"  - Reasoning: {step.reasoning}\n"
-            investigation_log += f"  - Extracted: {step.extracted_text}\n"
-            if step.is_done:
-                investigation_log += "  - Status: Reached End/Termination\n"
+            investigation_log += f"  Obs: {step.visual_observation}\n"
+            for edge in step.outgoing_edges:
+                 loc_info = f"Grid: {edge.grid_refs}" if self.use_grid else f"BBox: {edge.bbox}"
+                 investigation_log += f"    -> {edge.target_id} [{edge.edge_label}] ({loc_info})\n"
             investigation_log += "\n"
 
-        # 3. AI Synthesis (Refined)
-        if self.output_format == OutputFormat.MERMAID:
-            prompt = f"""
-            Refine the fragmented diagram information into a single, valid, and clean Mermaid flowchart.
-            
-            # Investigation Log (Context)
-            You have walked through the diagram step-by-step. Here is the log of your findings:
-            {investigation_log}
-            
-            # Instructions
-            1. Use the "Reasoning" in the log to understand the true logic and flow.
-            2. **Merge duplicate nodes**: Ensure nodes with same text (e.g. "End", "Start") share the same ID.
-            3. Fix any syntax errors in the Mermaid code.
-            4. Ensure standard top-down (graph TD) orientation.
-            5. Output ONLY the Mermaid code block.
-            """
-        else:
-            prompt = f"""
-            Based on the detailed investigation log below, summarize the entire business flow into a coherent, natural Japanese explanation.
-            
-            # Investigation Log (Context)
-            You have walked through the diagram step-by-step. Here is the log of your findings:
-            {investigation_log}
-            
-            # Instructions
-            1. Read the "Reasoning" to capture the nuance of conditions (Yes/No branches).
-            2. Reconstruct the story of the process flow.
-            3. Use natural conjunctions (e.g., "その後", "もし〜なら", "この時点で終了します").
-            4. Output as a clean, easy-to-read text (Markdown allowed).
-            """
-
-        # 画像なし(None)でテキストのみの処理としてリクエスト
+        prompt = f"""
+        Refine the flowchart data into valid Mermaid code.
+        # Log
+        {investigation_log}
+        # Raw Data
+        {raw_content}
+        # Instructions
+        1. Ensure logical flow.
+        2. Remove '%%' comments.
+        3. Fix syntax.
+        4. Output ONLY Mermaid code.
+        """
         refined_content, usage = vlm.query_text(prompt, image_path=None)
-        
         return refined_content, raw_content, usage
 

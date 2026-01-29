@@ -1,0 +1,45 @@
+flowchart TD
+  Start([Start]) --> DefineJD[Define job description]
+  DefineJD --> RequestHR[Request personnel to HR]
+  RequestHR --> ClassifyHiring[Classify job hiring]
+  ClassifyHiring --> RegularTop{Is it a regular process?}
+
+  RegularTop -->|No| SpecialHiring([Special hiring process])
+  RegularTop -->|Yes| CreatePosting[Create job posting]
+
+  CreatePosting --> FoundCandidate{Found a suitable candidate?}
+  FoundCandidate -->|No| ReviewPrev[Review previous candidate]
+  FoundCandidate -->|Yes| SetupMeeting[Setup a meeting with candidate]
+
+  ReviewPrev --> CandidateSuitable{Is the candidate suitable for the job?}
+  CandidateSuitable -->|No| HiringPlan[Make a hiring plan]
+  CandidateSuitable -->|Yes| SetupMeeting
+
+  HiringPlan --> PostOnline[Create job posting online]
+  PostOnline --> CollectResumes[Collect submitted resumes]
+  CollectResumes --> RegularResumes{Is it a regular process?}
+  RegularResumes -->|Yes| SetupMeeting
+  RegularResumes -->|No| FinalRevisit([Conduct final interview (revisit)])
+
+  SetupMeeting --> Shortlist[Shortlist the candidate]
+  SetupMeeting --> InitialInterview[Conduct initial interview]
+
+  Shortlist --> FinalizeRate[Finalize job rate]
+  FinalizeRate --> SendOffer[Send job offer]
+  SendOffer --> AcceptOffer{Candidate accept the offer?}
+  AcceptOffer -->|Yes| Hire([Hire the candidate])
+  AcceptOffer -->|No| FinalRevisit
+
+  InitialInterview --> ListQuestions[List all interview questions]
+  ListQuestions --> FinalInterview[Conduct final interview]
+  FinalInterview --> ReferenceChecked{Reference checked?}
+  ReferenceChecked -->|Yes| SendOffer
+  ReferenceChecked -->|No| FinalRevisit
+
+  classDef startEnd fill:#f9a23b,stroke:#333,stroke-width:1px,color:#111;
+  classDef process fill:#333,stroke:#111,stroke-width:1px,color:#fff;
+  classDef decision fill:#6aa7ff,stroke:#1f4ea8,stroke-width:1px,color:#111;
+
+  class Start,SpecialHiring,FinalRevisit,Hire startEnd;
+  class DefineJD,RequestHR,ClassifyHiring,CreatePosting,ReviewPrev,HiringPlan,PostOnline,CollectResumes,SetupMeeting,Shortlist,FinalizeRate,SendOffer,InitialInterview,ListQuestions,FinalInterview process;
+  class RegularTop,FoundCandidate,CandidateSuitable,RegularResumes,AcceptOffer,ReferenceChecked decision;

@@ -1,8 +1,7 @@
 from enum import Enum
 from pydantic import BaseModel, Field
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
-# ▼ コスト集計用
 class TokenUsage(BaseModel):
     input_tokens: int = 0
     output_tokens: int = 0
@@ -14,16 +13,9 @@ class TokenUsage(BaseModel):
             input_tokens=self.input_tokens + other.input_tokens,
             output_tokens=self.output_tokens + other.output_tokens
         )
-
     @property
     def total_tokens(self) -> int:
         return self.input_tokens + self.output_tokens
-
-    # 単価を受け取って計算する（モデル設定に依存するためここには単価を持たない）
-    def calculate_cost(self, input_price: float, output_price: float) -> float:
-        input_cost = (self.input_tokens / 1_000_000) * input_price
-        output_cost = (self.output_tokens / 1_000_000) * output_price
-        return input_cost + output_cost
 
 class DiagramType(str, Enum):
     FLOWCHART = "flowchart"
@@ -36,25 +28,67 @@ class OutputFormat(str, Enum):
     MERMAID = "mermaid"
     NATURAL_LANGUAGE = "natural_language"
 
+class ConnectedNode(BaseModel):
+    target_id: str = Field(..., description="Suggested ID for the next node.")
+    description: str = Field(..., description="Brief visual description.")
+    edge_label: Optional[str] = Field(None, description="Label on the arrow (e.g., Yes, No).")
+    
+    bbox: Optional[List[int]] = Field(None, description="[ymin, xmin, ymax, xmax] (0-1000).")
+    grid_refs: Optional[List[str]] = Field(None, description="List of ALL overlapping grid labels.")
+
 class Focus(BaseModel):
     description: str = Field(..., description="視覚的な説明")
-    bbox: Optional[List[int]] = Field(None, description="[x1, y1, x2, y2]")
-    # ▼ 追加: IDによる管理
-    suggested_id: Optional[str] = Field(None, description="推測されるノードID (例: node_General_Inquiries)")
+    suggested_id: Optional[str] = Field(None, description="推測されるノードID")
+    
+    bbox: Optional[List[int]] = Field(None)
+    grid_refs: Optional[List[str]] = Field(None)
+
+    def centroid(self) -> Tuple[float, float]:
+        if not self.bbox or len(self.bbox) != 4:
+            return (0.0, 0.0)
+        y_center = (self.bbox[0] + self.bbox[2]) / 2
+        x_center = (self.bbox[1] + self.bbox[3]) / 2
+        return (y_center, x_center)
+    
+    def is_same_location_hybrid(self, other: 'Focus', spatial_threshold: float = 100.0) -> bool:
+        """
+        [Hybrid Identity Check: OR Logic]
+        Grid または BBox のどちらか一方が一致していれば「同一ノード」とみなす。
+        """
+        
+        # 1. Grid Check
+        grid_match = False
+        if self.grid_refs and other.grid_refs:
+            # 積集合が空でない（共通のセルがある）ならマッチ
+            if not set(self.grid_refs).isdisjoint(set(other.grid_refs)):
+                grid_match = True
+        
+        # 2. BBox Check (Secondary)
+        bbox_match = False
+        c1 = self.centroid()
+        c2 = other.centroid()
+        
+        # 座標が両方とも有効な場合のみ計算
+        if c1 != (0.0, 0.0) and c2 != (0.0, 0.0):
+            # ユークリッド距離の二乗で判定
+            dist_sq = (c1[0] - c2[0])**2 + (c1[1] - c2[1])**2
+            if dist_sq < spatial_threshold**2:
+                bbox_match = True
+        
+        # どちらかがTrueなら同一とみなす (Forgiving Logic)
+        return grid_match or bbox_match
 
 class StepInterpretation(BaseModel):
-    extracted_text: str = Field(..., description="The interpreted content.")
-    next_focus_candidates: List[Focus] = Field(..., description="List of ALL immediate next nodes.")
-    is_done: bool = Field(False, description="Is path finished")
-    reasoning: str = Field(..., description="Thinking process")
+    visual_observation: str = Field(..., description="Step 1: Visual observation.")
+    arrow_tracing: str = Field(..., description="Step 2: Trace lines.")
+    outgoing_edges: List[ConnectedNode] = Field(..., description="Step 3: Identified connections.")
+    is_done: bool = Field(False)
 
 class DiagramResult(BaseModel):
     diagram_type: str
     output_format: OutputFormat
-    
-    content: str      # AIによって洗練された最終結果 (Refined)
-    raw_content: str  # 機械的に結合された生の結果 (Raw)
-    
+    content: str
+    raw_content: str
     full_description: str
     usage: TokenUsage
     cost_usd: float

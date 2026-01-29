@@ -329,3 +329,13 @@ if __name__ == "__main__":
         outgoing = [e for e in result2['edges'] if e['source'] == node_id]
         print(f"{node_id}: {len(outgoing)} outgoing edges -> {[e['target'] for e in outgoing]}")
 
+
+if __name__ == "__main__":
+    with open("samples/sample-7.mmd", "r", encoding='utf-8') as f:
+        mermaid = f.read()
+
+    result = mermaid_to_graph(mermaid)
+
+    with open("samples/sample-7.json", "w", encoding='utf-8') as f:
+        json.dump(result, f, ensure_ascii=False, indent=4)
+

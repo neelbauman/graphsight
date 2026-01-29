@@ -1,12 +1,12 @@
 from typing import Tuple
-from pydantic import BaseModel, Field
 from loguru import logger
+from pydantic import BaseModel, Field
 from ..llm.base import BaseVLM
 from ..models import DiagramType, TokenUsage
 
 class ClassificationResult(BaseModel):
-    diagram_type: DiagramType = Field(..., description="判定されたMermaidの図版タイプ")
-    reasoning: str = Field(..., description="なぜそのタイプだと判断したかの理由")
+    diagram_type: DiagramType
+    reasoning: str = Field(..., description="The reason for this classification based on visual features.")
 
 class DiagramDetector:
     def __init__(self, vlm: BaseVLM):
@@ -16,18 +16,21 @@ class DiagramDetector:
         logger.info("🕵️  Detecting diagram type...")
         
         prompt = """
-        Analyze this image and classify the diagram type (flowchart, sequenceDiagram, etc).
-        If uncertain, choose 'flowchart'.
+        Analyze the provided image and classify the diagram type.
+        Options: flowchart, sequenceDiagram, classDiagram, erDiagram, unknown.
+        Return the detected type and a brief reasoning.
         """
         
         try:
+            # 同期呼び出し
             result, usage = self.vlm.query_structured(prompt, image_path, ClassificationResult)
             
-            logger.info(f"✅ Type Detected: {result.diagram_type.value.upper()}")
+            logger.info(f"✅ Type Detected: {result.diagram_type.name}")
             logger.debug(f"   Reason: {result.reasoning}")
             
             return result.diagram_type, usage
 
         except Exception as e:
-            logger.warning(f"⚠️ Detection failed: {e}")
+            logger.warning(f"Detection failed or timed out: {e}. Defaulting to FLOWCHART.")
             return DiagramType.FLOWCHART, TokenUsage()
+
