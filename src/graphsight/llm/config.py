@@ -34,8 +34,8 @@ MODEL_REGISTRY = {
     # 将来的なモデルの例 (temperature不可、reasoning_effort指定)
     "gpt-5": ModelConfig(
         name="gpt-5", # 仮
-        input_price_per_m=15.00,
         model_type=ModelType.REASONING,
+        input_price_per_m=15.00,
         output_price_per_m=60.00,
         default_params={
             "reasoning_effort": "high",
@@ -45,8 +45,8 @@ MODEL_REGISTRY = {
     "gpt-5.2": ModelConfig(
         name="gpt-5.2", # 仮
         model_type=ModelType.REASONING,
-        input_price_per_m=15.00,
-        output_price_per_m=60.00,
+        input_price_per_m=1.75,
+        output_price_per_m=14.00,
         default_params={
             "reasoning_effort": "high",
         },

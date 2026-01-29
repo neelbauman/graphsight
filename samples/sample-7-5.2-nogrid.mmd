@@ -1,0 +1,50 @@
+```mermaid
+flowchart TD
+  Start([Start]) --> DefineJD[Define job description]
+  DefineJD --> RequestHR[Request personnel to HR]
+  RequestHR --> Classify[Classify job hiring]
+  Classify --> RegularTop{"Is it a regular process?"}
+
+  RegularTop -- No --> Special[Special hiring process]
+  RegularTop -- Yes --> CreatePosting[Create job posting]
+  CreatePosting --> FoundCandidate{"Found a suitable candidate?"}
+
+  FoundCandidate -- No --> ReviewPrev[Review previous candidate]
+  FoundCandidate -- Yes --> SetupMeeting[Setup a meeting with candidate]
+  ReviewPrev --> CandidateSuitable{"is the candidate suitable for the job?"}
+
+  CandidateSuitable -- No --> HiringPlan[Make a hiring plan]
+  CandidateSuitable -- Yes --> SetupMeeting
+
+  SetupMeeting --> InitialInterview[Conduct initial Interview]
+  InitialInterview --> ListQuestions[List all interview questions]
+  ListQuestions --> FinalInterviewMid[Conduct final Interview]
+  FinalInterviewMid --> ReferenceChecked{"Reference checked?"}
+
+  ReferenceChecked -- Yes --> Shortlist[Shortlist the candidate]
+  ReferenceChecked -- No --> FinalInterviewOrange([Conduct final Interview])
+
+  Shortlist --> FinalizeRate[Finalize job rate]
+  FinalizeRate --> SendOffer[Send job offer]
+  SendOffer --> AcceptOffer{"Candidate accept the offer?"}
+
+  AcceptOffer -- Yes --> Hire([Hire the Candidate])
+  AcceptOffer -- No --> FinalInterviewOrange
+
+  HiringPlan --> PostingOnline[Create job posting online]
+  PostingOnline --> CollectResumes[Collect submitted resumes]
+  CollectResumes --> RegularBottom{"Is it a regular process?"}
+
+  RegularBottom -- Yes --> SetupMeeting
+  RegularBottom -- No --> FinalInterviewOrange
+
+  classDef terminator fill:#f6a623,stroke:#a66b00,color:#000;
+  classDef process fill:#2f3b44,stroke:#1f272d,color:#fff;
+  classDef processGray fill:#6b6f73,stroke:#404447,color:#fff;
+  classDef decision fill:#5aa9ff,stroke:#1f5fbf,color:#000;
+
+  class Start,FinalInterviewOrange,Hire terminator;
+  class DefineJD,RequestHR,Classify,Special,CreatePosting,HiringPlan,PostingOnline,CollectResumes process;
+  class ReviewPrev,SetupMeeting,InitialInterview,ListQuestions,FinalInterviewMid,Shortlist,FinalizeRate,SendOffer processGray;
+  class RegularTop,FoundCandidate,CandidateSuitable,ReferenceChecked,RegularBottom,AcceptOffer decision;
+```

@@ -55,11 +55,9 @@ class Focus(BaseModel):
         [Hybrid Identity Check: OR Logic]
         Grid または BBox のどちらか一方が一致していれば「同一ノード」とみなす。
         """
-        
         # 1. Grid Check
         grid_match = False
         if self.grid_refs and other.grid_refs:
-            # 積集合が空でない（共通のセルがある）ならマッチ
             if not set(self.grid_refs).isdisjoint(set(other.grid_refs)):
                 grid_match = True
         
@@ -68,15 +66,16 @@ class Focus(BaseModel):
         c1 = self.centroid()
         c2 = other.centroid()
         
-        # 座標が両方とも有効な場合のみ計算
         if c1 != (0.0, 0.0) and c2 != (0.0, 0.0):
-            # ユークリッド距離の二乗で判定
             dist_sq = (c1[0] - c2[0])**2 + (c1[1] - c2[1])**2
             if dist_sq < spatial_threshold**2:
                 bbox_match = True
         
-        # どちらかがTrueなら同一とみなす (Forgiving Logic)
         return grid_match or bbox_match
+
+# ▼▼▼ 追加: InitialFocusList ▼▼▼
+class InitialFocusList(BaseModel):
+    start_nodes: List[Focus]
 
 class StepInterpretation(BaseModel):
     visual_observation: str = Field(..., description="Step 1: Visual observation.")
