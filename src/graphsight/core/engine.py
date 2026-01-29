@@ -152,8 +152,16 @@ class GraphInterpreter:
             except OSError: pass
 
         logger.info("📝 Synthesizing...")
-        final_content, raw_content, synth_usage = strategy.synthesize(self.vlm, extracted_data, step_history)
+
+        final_content, raw_content, synth_usage = strategy.synthesize(self.vlm, target_image_path, extracted_data, step_history)
         total_usage += synth_usage
+
+        if use_grid and target_image_path != image_path and os.path.exists(target_image_path):
+            try:
+                os.remove(target_image_path)
+                logger.debug("🧹 Cleaned up temporary grid image.")
+            except OSError:
+                pass
         
         return DiagramResult(
             diagram_type=strategy.mermaid_type,

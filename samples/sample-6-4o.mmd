@@ -1,0 +1,28 @@
+```mermaid
+flowchart TD
+  UL[Unqualified Lead] --> TM[Target Marketing Campaigns Executed]
+  TM --> MQL{Valid MQL?}
+  MQL -->|Yes| SDR[Sales Development Representative Engages with prospect]
+  SDR --> AGREE{Agrees to 1st discovery call}
+  AGREE -->|Yes| CALL1[SDR Conducts 1st Discovery Call]
+  AGREE -->|No| TM
+
+  CALL1 --> OPP{Is there an opportunity?}
+  OPP -->|Yes| CALL2[Account Executive Conducts 2nd Discovery Call]
+  OPP -->|No| CALL1
+
+  CALL2 --> SQL{Valid SQL?}
+  SQL -->|Yes| CRM[Opportunity Details Entered in CRM]
+  SQL -->|No| TM
+
+  CRM --> DISC[Discovery Stage]
+  DISC --> DEMO[Demo Stage]
+  DEMO --> PROP[proposal stage]
+  PROP --> NEG[Negotiations stage]
+  NEG --> WTP{Willing to Purchase}
+  WTP -->|No| LOST[Deal lost]
+  WTP -->|Yes| WON[Deal Won]
+
+  LOST --> UL
+  WON --> UL
+```

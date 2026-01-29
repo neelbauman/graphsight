@@ -21,9 +21,6 @@ class BaseStrategy(ABC):
         pass
     
     @abstractmethod
-    def synthesize(self, vlm: BaseVLM, extracted_texts: List[str], step_history: List[StepInterpretation]) -> Tuple[str, str, TokenUsage]:
-        """
-        Returns: (Refined Content, Raw Content, TokenUsage)
-        """
+    def synthesize(self, vlm: BaseVLM, image_path: str, extracted_texts: List[str], step_history: List[StepInterpretation]) -> Tuple[str, str, TokenUsage]:
         pass
 

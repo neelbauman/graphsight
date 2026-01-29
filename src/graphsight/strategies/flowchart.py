@@ -140,7 +140,7 @@ class FlowchartStrategy(BaseStrategy):
         Output strictly matching the schema.
         """
 
-    def synthesize(self, vlm: BaseVLM, extracted_texts: List[str], step_history: List[StepInterpretation]) -> Tuple[str, str, TokenUsage]:
+    def synthesize(self, vlm: BaseVLM, image_path: str, extracted_texts: List[str], step_history: List[StepInterpretation]) -> Tuple[str, str, TokenUsage]:
         # 1. Mechanical Synthesis (Raw)
         # engine.py で生成された Mermaid コード（グリッドコメント付き）を整理
         seen = set()
@@ -174,6 +174,11 @@ class FlowchartStrategy(BaseStrategy):
         # 3. AI Refinement
         prompt = f"""
         Refine the fragmented flowchart data into a single, valid, and clean Mermaid flowchart.
+
+        # Input Data
+        1. **The Image**: Use the provided image (with Grid overlay) as the ULTIMATE GROUND TRUTH.
+        2. **Investigation Log**: The step-by-step tracing history.
+        3. **Raw Data**: The mechanically assembled graph (may contain fragments).
         
         # Investigation Log (The Physical Truth)
         This log records what was actually seen and traced step-by-step. Trust this over your semantic assumptions.
@@ -190,7 +195,7 @@ class FlowchartStrategy(BaseStrategy):
         5. Output ONLY the Mermaid code block.
         """
         
-        refined_content, usage = vlm.query_text(prompt, image_path=None)
+        refined_content, usage = vlm.query_text(prompt, image_path=image_path)
         
         return refined_content, raw_content, usage
 

@@ -1,0 +1,30 @@
+```mermaid
+flowchart LR
+  UnqualifiedLead[Unqualified Lead] --> TargetMarketing[Target Marketing Campaigns Executed]
+  TargetMarketing --> ValidMQL{Valid MQL?}
+  ValidMQL -->|Yes| SDREngages[Sales Development Representative Engages with prospect]
+  SDREngages --> AgreesCall{Agrees to 1st discovery call}
+
+  AgreesCall -->|Yes| SDRCall[SDR Conducts 1st Discovery Call]
+  AgreesCall -->|No| TargetMarketing
+
+  SDRCall --> Opportunity{Is there an opportunity?}
+  Opportunity -->|Yes| AECall[Account Executive Conducts 2nd Discovery Call]
+  Opportunity -->|No| TargetMarketing
+
+  AECall --> ValidSQL{Valid SQL?}
+  ValidSQL -->|Yes| OppCRM[Opportunity Details Entered in CRM]
+  ValidSQL -->|No| TargetMarketing
+
+  OppCRM --> Discovery[Discovery Stage]
+  Discovery --> Demo[Demo Stage]
+  Demo --> Proposal[Proposal stage]
+  Proposal --> Negotiations[Negotiations stage]
+  Negotiations --> Willing{Willing to Purchase}
+
+  Willing -->|No| DealLost[Deal lost]
+  Willing -->|Yes| DealWon[Deal Won]
+
+  DealLost --> UnqualifiedLead
+  DealWon --> UnqualifiedLead
+```
