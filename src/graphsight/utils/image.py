@@ -1,8 +1,8 @@
 import base64
-from pathlib import Path
 import math
 import string
 import os
+from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont
 from typing import Tuple
 
@@ -14,10 +14,11 @@ def encode_image_to_base64(image_path: str) -> str:
     with open(path, "rb") as image_file:
         return base64.b64encode(image_file.read()).decode('utf-8')
 
+
 def add_grid_overlay(image_path: str, min_cell_size: int = 150) -> Tuple[str, int, int]:
     """
-    画像にグリッドとラベル(A1, B2...)を焼き込み、一時ファイルのパスを返す。
-    ラベルはセルの中央に配置し、サイズを控えめにする。
+    画像にグリッドを焼き込む。
+    【改善版】実線によるノイズを避けるため、交点マーカー(+)とラベルのみを描画する。
     """
     with Image.open(image_path) as img:
         img = img.convert("RGBA")
@@ -32,13 +33,11 @@ def add_grid_overlay(image_path: str, min_cell_size: int = 150) -> Tuple[str, in
         overlay = Image.new("RGBA", img.size, (255, 255, 255, 0))
         draw = ImageDraw.Draw(overlay)
         
-        # フォント設定: 少し小さく (24 -> 16)
-        font_size = 16
+        # フォント設定 (小さめ、かつ視認性重視)
+        font_size = 14
         try:
-            # Linux/Docker/Mac/Win それぞれの代表的なフォントパス
             font_paths = [
                 "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
-                "/System/Library/Fonts/Helvetica.ttc",
                 "arial.ttf",
                 "C:\\Windows\\Fonts\\arial.ttf"
             ]
@@ -54,12 +53,27 @@ def add_grid_overlay(image_path: str, min_cell_size: int = 150) -> Tuple[str, in
         except Exception:
             font = ImageFont.load_default()
 
+        # マーカーとラベルの色設定 (シアン系: 図面で赤や黒はよく使われるため避ける)
+        marker_color = (0, 150, 255, 180) # 青緑系、半透明
+        text_color = (0, 100, 200, 200)
+        bg_color = (255, 255, 255, 160)   # 白背景、かなり薄く
+
         for r in range(rows):
             for c in range(cols):
+                # セル左上の座標
                 x = c * cell_w
                 y = r * cell_h
                 
-                # Excel風カラム名
+                # --- 1. 交点マーカー (+) の描画 ---
+                # 各セルの四隅を描画するとうるさいので、左上だけ描画して網羅する
+                # マーカーサイズ
+                m_size = 10 
+                # 横棒
+                draw.line([(x - m_size, y), (x + m_size, y)], fill=marker_color, width=2)
+                # 縦棒
+                draw.line([(x, y - m_size), (x, y + m_size)], fill=marker_color, width=2)
+
+                # --- 2. ラベルの生成 ---
                 col_label = ""
                 temp_c = c
                 while temp_c >= 0:
@@ -69,11 +83,7 @@ def add_grid_overlay(image_path: str, min_cell_size: int = 150) -> Tuple[str, in
                 
                 label = f"{col_label}{r + 1}"
                 
-                # グリッド線 (赤色、半透明)
-                draw.rectangle([x, y, x + cell_w, y + cell_h], outline=(255, 0, 0, 80), width=1)
-                
-                # --- 中央配置の計算 ---
-                # テキストのサイズを取得
+                # --- 3. ラベルを中央に配置 ---
                 if hasattr(draw, "textbbox"):
                     left, top, right, bottom = draw.textbbox((0, 0), label, font=font)
                     text_w = right - left
@@ -81,17 +91,18 @@ def add_grid_overlay(image_path: str, min_cell_size: int = 150) -> Tuple[str, in
                 else:
                     text_w, text_h = draw.textsize(label, font=font)
 
-                # セルの中央 - テキストの半分のサイズ
                 text_x = x + (cell_w - text_w) / 2
                 text_y = y + (cell_h - text_h) / 2
                 
-                # 背景矩形 (視認性向上)
-                pad = 4
-                bg_rect = [text_x - pad, text_y - pad, text_x + text_w + pad, text_y + text_h + pad]
-                draw.rectangle(bg_rect, fill=(255, 255, 255, 200))
-                
-                # テキスト描画
-                draw.text((text_x, text_y), label, fill=(200, 0, 0, 255), font=font)
+                # テキスト背景 (最小限に)
+                pad = 2
+                draw.rectangle(
+                    [text_x - pad, text_y - pad, text_x + text_w + pad, text_y + text_h + pad], 
+                    fill=bg_color
+                )
+                draw.text((text_x, text_y), label, fill=text_color, font=font)
+
+        # 最後の右端・下端の線のためにマーカーを追加描画するループは省略（視認性には影響小）
 
         out = Image.alpha_composite(img, overlay)
         
