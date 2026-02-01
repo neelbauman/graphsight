@@ -1,30 +1,28 @@
 ```mermaid
 flowchart LR
-  UnqualifiedLead[Unqualified Lead] --> TargetMarketing[Target Marketing Campaigns Executed]
-  TargetMarketing --> ValidMQL{Valid MQL?}
-  ValidMQL -->|Yes| SDREngages[Sales Development Representative Engages with prospect]
-  SDREngages --> AgreesCall{Agrees to 1st discovery call}
+  UL[Unqualified Lead] --> TM[Target Marketing Campaigns Executed]
+  TM --> VM{Valid MQL?}
 
-  AgreesCall -->|Yes| SDRCall[SDR Conducts 1st Discovery Call]
-  AgreesCall -->|No| TargetMarketing
+  VM -->|Yes| SDR[Sales Development Representative Engages with prospect]
+  VM -->|No| TM
 
-  SDRCall --> Opportunity{Is there an opportunity?}
-  Opportunity -->|Yes| AECall[Account Executive Conducts 2nd Discovery Call]
-  Opportunity -->|No| TargetMarketing
+  SDR --> A1{Agrees to 1st discovery call}
+  A1 -->|Yes| D1[SDR Conducts 1st Discovery Call]
+  A1 -->|No| TM
 
-  AECall --> ValidSQL{Valid SQL?}
-  ValidSQL -->|Yes| OppCRM[Opportunity Details Entered in CRM]
-  ValidSQL -->|No| TargetMarketing
+  D1 --> OPP{Is there an opportunity?}
+  OPP -->|Yes| AE[Account Executive Conducts 2nd Discovery Call]
+  OPP -->|No| TM
 
-  OppCRM --> Discovery[Discovery Stage]
-  Discovery --> Demo[Demo Stage]
-  Demo --> Proposal[Proposal stage]
-  Proposal --> Negotiations[Negotiations stage]
-  Negotiations --> Willing{Willing to Purchase}
+  AE --> VS{Valid SQL?}
+  VS -->|Yes| CRM[Opportunity Details Entered in CRM]
+  VS -->|No| TM
 
-  Willing -->|No| DealLost[Deal lost]
-  Willing -->|Yes| DealWon[Deal Won]
+  CRM --> DS[Discovery Stage] --> DEMO[Demo Stage] --> PROP[proposal stage] --> NEG[Negotiations stage]
+  NEG --> WTP{Willing to Purchase}
 
-  DealLost --> UnqualifiedLead
-  DealWon --> UnqualifiedLead
+  WTP -->|No| LOST[Deal lost]
+  WTP -->|Yes| WON[Deal Won]
+
+  LOST --> UL
 ```

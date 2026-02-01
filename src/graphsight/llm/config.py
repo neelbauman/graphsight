@@ -2,6 +2,9 @@ from pydantic import BaseModel
 from loguru import logger
 from typing import Dict, Any, Set
 from enum import Enum
+from beautyspot import Spot
+
+spot = Spot("graphsight-engine")
 
 
 class ModelType(str, Enum):

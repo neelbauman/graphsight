@@ -1,12 +1,7 @@
 from typing import Tuple
 from loguru import logger
-from pydantic import BaseModel, Field
 from ..llm.base import BaseVLM
-from ..models import DiagramType, TokenUsage
-
-class ClassificationResult(BaseModel):
-    diagram_type: DiagramType
-    reasoning: str = Field(..., description="The reason for this classification based on visual features.")
+from ..models import DiagramType, TokenUsage, ClassificationResult
 
 class DiagramDetector:
     def __init__(self, vlm: BaseVLM):

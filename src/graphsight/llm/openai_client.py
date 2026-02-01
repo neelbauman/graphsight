@@ -1,11 +1,16 @@
 import base64
 from typing import List, Type, TypeVar, Tuple
 from openai import OpenAI  # Sync Client
-from ..models import TokenUsage
+from beautyspot import KeyGen
+from ..models import TokenUsage, spot
 from .base import BaseVLM
 from .config import get_model_config, ModelType
 
 T = TypeVar("T")
+
+
+def ignore_self(self, *args, **kwargs):
+    return KeyGen.default(args, kwargs)
 
 class OpenAIVLM(BaseVLM):
     def __init__(self, model: str = "gpt-4o", api_key: str | None = None):
@@ -61,6 +66,7 @@ class OpenAIVLM(BaseVLM):
                 del params[excl]
         return params
 
+    @spot.mark(input_key_fn=ignore_self)
     def query_structured(self, prompt: str, image_path: str, response_model: Type[T]) -> Tuple[T, TokenUsage]:
         messages = self._prepare_messages(prompt, image_path)
         request_kwargs = self._build_request_params(messages=messages, response_format=response_model)
@@ -69,6 +75,7 @@ class OpenAIVLM(BaseVLM):
         completion = self.client.beta.chat.completions.parse(**request_kwargs)
         return completion.choices[0].message.parsed, self._extract_usage(completion)
 
+    @spot.mark(input_key_fn=ignore_self)
     def query_text(self, prompt: str, image_path: str | None = None) -> Tuple[str, TokenUsage]:
         messages = self._prepare_messages(prompt, image_path)
         request_kwargs = self._build_request_params(messages=messages)

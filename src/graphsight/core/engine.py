@@ -1,11 +1,13 @@
 import math
 import os
+from beautyspot import Spot
 from loguru import logger
 from typing import List, Dict, Set, Optional
 from ..strategies.base import BaseStrategy
 from ..llm.base import BaseVLM
 from ..models import DiagramResult, Focus, TokenUsage, StepInterpretation
 from ..utils.image import add_grid_overlay
+
 
 class NodeRegistry:
     def __init__(self, mode: str = "bbox", spatial_threshold: float = 100.0):
@@ -25,38 +27,41 @@ class NodeRegistry:
         
         for i, candidate in enumerate(candidates):
             # Hybrid判定 (OR条件)
-            # どちらか一方でも一致すればマージする
             if focus.is_same_location_hybrid(candidate, self.threshold):
                 unique_id = base_id if i == 0 else f"{base_id}_{i + 1}"
                 logger.debug(f"🔗 Registry: Merged '{base_id}' -> '{unique_id}' (Location Match)")
                 return unique_id
 
-        # どちらも一致しなければ新規 (Spatial Split)
+        # 一致しなければ新規 (Spatial Split)
         self.nodes[base_id].append(focus)
         new_suffix = len(self.nodes[base_id])
         unique_id = f"{base_id}_{new_suffix}"
-        logger.info(f"🔱 Registry: Split '{base_id}' -> '{unique_id}' (Different Grid AND Far BBox)")
+        logger.info(f"🔱 Registry: Split '{base_id}' -> '{unique_id}' (Double Standard: Location Mismatch)")
         return unique_id
+
 
 class GraphInterpreter:
     def __init__(self, vlm_client: BaseVLM):
         self.vlm = vlm_client
 
     def _format_loc(self, focus: Focus, use_grid: bool) -> str:
+        """ログ表示用の位置情報フォーマッタ"""
         if use_grid:
             refs = focus.grid_refs if focus.grid_refs else "NoGrid"
             return f"Grid: {refs}"
         else:
             return f"BBox: {focus.bbox}"
 
-    def process(self, image_path: str, strategy: BaseStrategy, initial_usage: TokenUsage | None = None) -> DiagramResult:
+    def process(self, image_path: str, strategy: BaseStrategy, initial_usage: Optional[TokenUsage] = None) -> DiagramResult:
         logger.info(f"🚀 Starting interpretation: {strategy.mermaid_type}")
 
+        # Grid Overlay
         use_grid = getattr(strategy, "use_grid", False)
         target_image_path = image_path
         if use_grid:
             logger.info("Applying Grid SoM Overlay...")
             try:
+                # ノイズ低減版の交点マーカー方式を使用
                 grid_path, r, c = add_grid_overlay(image_path, min_cell_size=150)
                 target_image_path = grid_path
                 logger.info(f"✅ Grid applied: {r}x{c} cells. Using temporary file: {target_image_path}")
@@ -134,6 +139,7 @@ class GraphInterpreter:
                     meta_comment = f" %% Grid: {src_g} -> {dst_g}"
                 
                 mermaid_line = f"{current_focus.suggested_id} {arrow} {resolved_target_id}{meta_comment}"
+                
                 extracted_data.append(mermaid_line)
                 
                 next_loc = self._format_loc(next_focus, use_grid)
@@ -146,16 +152,18 @@ class GraphInterpreter:
 
             step_count += 1
 
-        if use_grid and target_image_path != image_path and os.path.exists(target_image_path):
-            try:
-                os.remove(target_image_path)
-            except OSError: pass
-
+        # --- 修正箇所: Synthesize を Cleanup の前に実行 ---
         logger.info("📝 Synthesizing...")
-
-        final_content, raw_content, synth_usage = strategy.synthesize(self.vlm, target_image_path, extracted_data, step_history)
+        
+        final_content, raw_content, synth_usage = strategy.synthesize(
+            self.vlm, 
+            target_image_path, # ここで画像を参照するため、まだ削除してはいけない
+            extracted_data, 
+            step_history
+        )
         total_usage += synth_usage
 
+        # --- Cleanup (移動後) ---
         if use_grid and target_image_path != image_path and os.path.exists(target_image_path):
             try:
                 os.remove(target_image_path)

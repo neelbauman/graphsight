@@ -8,12 +8,14 @@ authors = [
 ]
 requires-python = ">=3.14"
 dependencies = [
+    "beautyspot[dashboard]==2.2.4",
     "loguru>=0.7.3",
     "openai>=2.15.0",
     "pillow>=12.1.0",
     "pydantic>=2.12.5",
     "python-dotenv>=1.2.1",
     "typer>=0.21.1",
+    "update>=0.0.1",
 ]
 
 [project.scripts]
@@ -28,6 +30,9 @@ venvPath = "."
 venv = ".venv"
 
 [dependency-groups]
+dev = [
+    "beautyspot>=2.0.0",
+]
 test = [
     "pytest>=9.0.2",
 ]

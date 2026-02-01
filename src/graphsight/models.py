@@ -1,7 +1,14 @@
 from enum import Enum
 from pydantic import BaseModel, Field
 from typing import List, Optional, Tuple
+from .llm.config import spot
 
+
+@spot.register(
+    code=1,
+    encoder=lambda x: x.model_dump_json().encode(),
+    decoder=lambda x: TokenUsage.model_validate_json(x),
+)
 class TokenUsage(BaseModel):
     input_tokens: int = 0
     output_tokens: int = 0
@@ -17,6 +24,7 @@ class TokenUsage(BaseModel):
     def total_tokens(self) -> int:
         return self.input_tokens + self.output_tokens
 
+
 class DiagramType(str, Enum):
     FLOWCHART = "flowchart"
     SEQUENCE = "sequenceDiagram"
@@ -24,10 +32,27 @@ class DiagramType(str, Enum):
     ER = "erDiagram"
     UNKNOWN = "unknown"
 
+
+@spot.register(
+    code=2,
+    encoder=lambda x: x.model_dump_json().encode(),
+    decoder=lambda x: ClassificationResult.model_validate_json(x),
+)
+class ClassificationResult(BaseModel):
+    diagram_type: DiagramType
+    reasoning: str = Field(..., description="The reason for this classification based on visual features.")
+
+
 class OutputFormat(str, Enum):
     MERMAID = "mermaid"
     NATURAL_LANGUAGE = "natural_language"
 
+
+@spot.register(
+    code=3,
+    encoder=lambda x: x.model_dump_json().encode(),
+    decoder=lambda x: ConnectedNode.model_validate_json(x),
+)
 class ConnectedNode(BaseModel):
     target_id: str = Field(..., description="Suggested ID for the next node.")
     description: str = Field(..., description="Brief visual description.")
@@ -36,6 +61,12 @@ class ConnectedNode(BaseModel):
     bbox: Optional[List[int]] = Field(None, description="[ymin, xmin, ymax, xmax] (0-1000).")
     grid_refs: Optional[List[str]] = Field(None, description="List of ALL overlapping grid labels.")
 
+
+@spot.register(
+    code=4,
+    encoder=lambda x: x.model_dump_json().encode(),
+    decoder=lambda x: Focus.model_validate_json(x),
+)
 class Focus(BaseModel):
     description: str = Field(..., description="視覚的な説明")
     suggested_id: Optional[str] = Field(None, description="推測されるノードID")
@@ -73,16 +104,33 @@ class Focus(BaseModel):
         
         return grid_match or bbox_match
 
-# ▼▼▼ 追加: InitialFocusList ▼▼▼
+
+@spot.register(
+    code=5,
+    encoder=lambda x: x.model_dump_json().encode(),
+    decoder=lambda x: InitialFocusList.model_validate_json(x),
+)
 class InitialFocusList(BaseModel):
     start_nodes: List[Focus]
 
+
+@spot.register(
+    code=6,
+    encoder=lambda x: x.model_dump_json().encode(),
+    decoder=lambda x: StepInterpretation.model_validate_json(x),
+)
 class StepInterpretation(BaseModel):
     visual_observation: str = Field(..., description="Step 1: Visual observation.")
     arrow_tracing: str = Field(..., description="Step 2: Trace lines.")
     outgoing_edges: List[ConnectedNode] = Field(..., description="Step 3: Identified connections.")
     is_done: bool = Field(False)
 
+
+@spot.register(
+    code=7,
+    encoder=lambda x: x.model_dump_json().encode(),
+    decoder=lambda x: DiagramResult.model_validate_json(x),
+)
 class DiagramResult(BaseModel):
     diagram_type: str
     output_format: OutputFormat
@@ -92,4 +140,5 @@ class DiagramResult(BaseModel):
     usage: TokenUsage
     cost_usd: float
     model_name: str
+
 
