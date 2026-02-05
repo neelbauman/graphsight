@@ -1,28 +1,24 @@
-```mermaid
-flowchart TD
-  UL[Unqualified Lead] --> TM[Target Marketing Campaigns Executed]
-  TM --> MQL{Valid MQL?}
-  MQL -->|Yes| SDR[Sales Development Representative Engages with prospect]
-  SDR --> AGREE{Agrees to 1st discovery call}
-  AGREE -->|Yes| CALL1[SDR Conducts 1st Discovery Call]
-  AGREE -->|No| TM
-
-  CALL1 --> OPP{Is there an opportunity?}
-  OPP -->|Yes| CALL2[Account Executive Conducts 2nd Discovery Call]
-  OPP -->|No| CALL1
-
-  CALL2 --> SQL{Valid SQL?}
-  SQL -->|Yes| CRM[Opportunity Details Entered in CRM]
-  SQL -->|No| TM
-
-  CRM --> DISC[Discovery Stage]
-  DISC --> DEMO[Demo Stage]
-  DEMO --> PROP[proposal stage]
-  PROP --> NEG[Negotiations stage]
-  NEG --> WTP{Willing to Purchase}
-  WTP -->|No| LOST[Deal lost]
-  WTP -->|Yes| WON[Deal Won]
-
-  LOST --> UL
-  WON --> UL
-```
+graph TD
+    node_AccountExecutive2ndCall --> node_ValidSQL %% Grid: ['F2'] -> ['F3']
+    node_Account_Exec_2nd_Discovery --> node_ValidSQL %% Grid: ['F2'] -> ['F3']
+    node_AgreeDiscovery -->|No| node_IsOpportunity %% Grid: ['E2'] -> ['F1']
+    node_AgreeDiscovery -->|Yes| node_AccountExecutive2ndCall %% Grid: ['E2'] -> ['F2']
+    node_Agrees_1st_Discovery -->|No| node_IsOpportunity %% Grid: ['E2'] -> ['F1']
+    node_Agrees_1st_Discovery -->|Yes| node_AccountExecutive2ndCall %% Grid: ['E2'] -> ['F2']
+    node_E4 -->|No| node_DealLost %% Grid: ['E4'] -> ['F4']
+    node_E4 -->|Yes| node_DealWon %% Grid: ['E4'] -> ['E5']
+    node_IsOpportunity -->|No| node_SDR_1st_Discovery %% Grid: ['F1'] -> ['E1']
+    node_IsOpportunity -->|Yes| node_Account_Exec_2nd_Discovery %% Grid: ['F1'] -> ['F2']
+    node_OpportunityCheck -->|No| node_SDR_1st_Discovery %% Grid: ['F1'] -> ['E1']
+    node_OpportunityCheck -->|Yes| node_Account_Exec_2nd_Discovery %% Grid: ['F1'] -> ['F2']
+    node_SDR_1st_Discovery -->|No| node_OpportunityCheck %% Grid: ['E1'] -> ['F1']
+    node_SDR_1st_Discovery -->|Yes| node_AgreeDiscovery %% Grid: ['E1'] -> ['E2']
+    node_SalesDevelopment --> node_Agrees_1st_Discovery %% Grid: ['D2'] -> ['E2']
+    node_SalesDevelopment --> node_SDR_1st_Discovery %% Grid: ['D2'] -> ['E1']
+    node_TargetMarketing --> node_ValidMQL %% Grid: ['B2'] -> ['C2']
+    node_TargetMarketingCampaignsExecuted --> node_ValidMQL %% Grid: ['B2'] -> ['C2']
+    node_Unknown --> node_TargetMarketingCampaignsExecuted %% Grid: ['A2'] -> ['B2']
+    node_ValidMQL -->|No| node_TargetMarketing %% Grid: ['C2'] -> ['B2']
+    node_ValidMQL -->|Yes| node_SalesDevelopment %% Grid: ['C2'] -> ['D2']
+    node_ValidSQL -->|No| node_F4 %% Grid: ['F3'] -> ['F4']
+    node_ValidSQL -->|Yes| node_E4 %% Grid: ['F3'] -> ['E4']

@@ -41,8 +41,8 @@ class NodeRegistry:
 
 
 class GraphInterpreter:
-    def __init__(self, vlm_client: BaseVLM):
-        self.vlm = vlm_client
+    def __init__(self, vlm: BaseVLM):
+        self.vlm = vlm
 
     def _format_loc(self, focus: Focus, use_grid: bool) -> str:
         """ログ表示用の位置情報フォーマッタ"""
@@ -52,11 +52,23 @@ class GraphInterpreter:
         else:
             return f"BBox: {focus.bbox}"
 
-    def process(self, image_path: str, strategy: BaseStrategy, initial_usage: Optional[TokenUsage] = None) -> DiagramResult:
-        logger.info(f"🚀 Starting interpretation: {strategy.mermaid_type}")
+    def process(self, image_path: str, strategy: BaseStrategy, initial_usage: Optional[TokenUsage] = None, traversal_mode: str = "dfs") -> DiagramResult:
+        logger.info(f"🚀 Starting interpretation: {strategy.mermaid_type} (Traversal: {traversal_mode.upper()})")
 
         # Grid Overlay
-        use_grid = getattr(strategy, "use_grid", False)
+        use_grid = getattr(strategy, "use_grid", False) # Strategy側で制御がない場合はFalse扱いだが、属性チェックは安全に
+        # structured strategyなどは明示的に持っていない可能性があるため、interfaceで統一するか、getattrで逃げる
+        # FlowchartStrategy系は持っている。StructuredFlowchartStrategyは継承元によっては持っていないので注意。
+        # 今回は BaseStrategy にはないが FlowchartStrategy にはある。
+        # 簡易的に kwargs や hasattr でチェックします。
+        
+        # 修正: use_grid が strategy にない場合のデフォルト
+        if not hasattr(strategy, "use_grid"):
+             # StructuredFlowchartStrategy などで use_grid を受け取るように実装するか、ここでデフォルトFalse
+             use_grid = False
+        else:
+             use_grid = strategy.use_grid
+
         target_image_path = image_path
         if use_grid:
             logger.info("Applying Grid SoM Overlay...")
@@ -80,6 +92,8 @@ class GraphInterpreter:
 
         # 1. 初期探索
         logger.info("🔍 Finding initial nodes...")
+        # strategyインスタンス自体に use_grid 属性がある前提のロジックになっている箇所に注意
+        # find_initial_focus は内部で use_grid を使っている場合があるが、引数としては image_path のみ
         initial_focus_list, usage = strategy.find_initial_focus(self.vlm, target_image_path)
         total_usage += usage
         
@@ -95,7 +109,13 @@ class GraphInterpreter:
         max_steps = 30
 
         while frontier_queue and step_count < max_steps:
-            current_focus = frontier_queue.pop(0)
+            # Traversal Mode Switching
+            if traversal_mode.lower() == "dfs":
+                # LIFO: Stack (Deepest first)
+                current_focus = frontier_queue.pop(-1)
+            else:
+                # FIFO: Queue (Breadth first)
+                current_focus = frontier_queue.pop(0)
             
             if current_focus.suggested_id in visited_unique_ids:
                 continue
@@ -152,18 +172,17 @@ class GraphInterpreter:
 
             step_count += 1
 
-        # --- 修正箇所: Synthesize を Cleanup の前に実行 ---
         logger.info("📝 Synthesizing...")
         
         final_content, raw_content, synth_usage = strategy.synthesize(
             self.vlm, 
-            target_image_path, # ここで画像を参照するため、まだ削除してはいけない
+            target_image_path,
             extracted_data, 
             step_history
         )
         total_usage += synth_usage
 
-        # --- Cleanup (移動後) ---
+        # Cleanup
         if use_grid and target_image_path != image_path and os.path.exists(target_image_path):
             try:
                 os.remove(target_image_path)

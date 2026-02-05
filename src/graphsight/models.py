@@ -1,8 +1,10 @@
 from enum import Enum
 from pydantic import BaseModel, Field
 from typing import List, Optional, Tuple
+# spot は config からインポート（循環参照に注意が必要ですが、ユーザーコードに従います）
+# もし config.py が models.py を import している場合は循環しますが、
+# ここではユーザー提示の通り .llm.config から import します。
 from .llm.config import spot
-
 
 @spot.register(
     code=1,
@@ -54,6 +56,7 @@ class OutputFormat(str, Enum):
     decoder=lambda x: ConnectedNode.model_validate_json(x),
 )
 class ConnectedNode(BaseModel):
+    # 以前 EdgeInfo と呼んでいたクラスです。既存の ConnectedNode を拡張・維持します。
     target_id: str = Field(..., description="Suggested ID for the next node.")
     description: str = Field(..., description="Brief visual description.")
     edge_label: Optional[str] = Field(None, description="Label on the arrow (e.g., Yes, No).")
@@ -120,8 +123,11 @@ class InitialFocusList(BaseModel):
     decoder=lambda x: StepInterpretation.model_validate_json(x),
 )
 class StepInterpretation(BaseModel):
-    visual_observation: str = Field(..., description="Step 1: Visual observation.")
-    arrow_tracing: str = Field(..., description="Step 2: Trace lines.")
+    # --- 変更点: Structured Mode (Zen Mode) のために Optional に変更 ---
+    visual_observation: Optional[str] = Field(None, description="Step 1: Visual observation.")
+    arrow_tracing: Optional[str] = Field(None, description="Step 2: Trace lines.")
+    
+    # 既存の ConnectedNode を使用
     outgoing_edges: List[ConnectedNode] = Field(..., description="Step 3: Identified connections.")
     is_done: bool = Field(False)
 
@@ -140,5 +146,4 @@ class DiagramResult(BaseModel):
     usage: TokenUsage
     cost_usd: float
     model_name: str
-
 

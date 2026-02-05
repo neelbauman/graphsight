@@ -9,12 +9,21 @@ def parse(
     output: str = typer.Option(None, help="Output file path"),
     format: str = typer.Option("mermaid", help="'mermaid' or 'natural_language'"),
     model: str = typer.Option("gpt-4o", help="Model to use"),
-    grid: bool = typer.Option(False, "--grid", help="[Experimental] Use Grid SoM for spatial reasoning.")
+    grid: bool = typer.Option(False, "--grid", help="[Experimental] Use Grid SoM for spatial reasoning."),
+    strategy: str = typer.Option("standard", "--strategy", help="Strategy: 'standard', 'fast', or 'structured'"),
+    traversal: str = typer.Option("dfs", "--traversal", help="Traversal: 'dfs' (Depth-First) or 'bfs' (Breadth-First)")
 ):
     try:
         sight = GraphSight(model=model)
-        # 同期実行
-        result = sight.interpret(image_path, format=format, experimental_grid=grid)
+        
+        # パラメータを受け渡す
+        result = sight.interpret(
+            image_path, 
+            format=format, 
+            experimental_grid=grid,
+            strategy_mode=strategy,
+            traversal_mode=traversal
+        )
         
         typer.echo(f"\n✨ --- AI Refined Result ---")
         typer.echo(result.content)

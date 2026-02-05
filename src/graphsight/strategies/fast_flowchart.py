@@ -5,9 +5,10 @@ from ..models import Focus, StepInterpretation, TokenUsage
 
 class FastFlowchartStrategy(FlowchartStrategy):
     """
-    GPT-4o-mini 向けに最適化された高速・低コスト戦略。
+    GPT-4o / GPT-4o-mini 向けに最適化された高速・低コスト戦略。
     - Instructionを極限まで減らし、Few-Shot（具体例）で誘導する。
     - Reasoning（思考ログ）を省略させる。
+    - Grid情報が有効な場合、座標情報をプロンプトに注入して精度を上げる。
     - AIによる最終清書をスキップし、Rawデータをそのまま返す。
     """
 
@@ -15,17 +16,26 @@ class FastFlowchartStrategy(FlowchartStrategy):
         # コンテキストは直近5件に絞ってトークン節約
         history_text = "\n".join(context_history[-5:])
         
-        # Few-Shot Examples: 言葉で説明するより、例を見せる方が安いモデルには効く
+        # Gridモード判定とプロンプト注入
+        if self.use_grid:
+            loc_str = f"Location: Grid={current_focus.grid_refs} (Look at these cells)"
+            # Gridモード用の追加ルール: 次のノードのグリッド位置を強く要求
+            spatial_rule = "4. **Spatial**: For next nodes, you MUST provide `grid_refs` (e.g. ['C3', 'D3']). This is vital for loops."
+        else:
+            loc_str = f"Location: BBox={current_focus.bbox}"
+            spatial_rule = ""
+
+        # Few-Shot Examples (Gridの有無で少し例示を変えるとさらに良いが、ここでは汎用的に定義)
         examples = """
         Example 1:
         Input Focus: "Decision Node 'Is Valid?'"
         Output: {
             "extracted_text": "node_Valid{Is Valid?} -->|Yes| node_ProcessA[Process A]\\nnode_Valid{Is Valid?} -->|No| node_End[End]",
-            "next_focus_candidates": [
-                {"description": "Process A node on the right", "suggested_id": "node_ProcessA"},
-                {"description": "End node at the bottom", "suggested_id": "node_End"}
+            "outgoing_edges": [
+                {"description": "Process A node on the right", "suggested_id": "node_ProcessA", "grid_refs": ["E4"]},
+                {"description": "End node at the bottom", "suggested_id": "node_End", "grid_refs": ["D6"]}
             ],
-            "is_done": false
+            "reasoning": ""
         }
         """
 
@@ -33,12 +43,17 @@ class FastFlowchartStrategy(FlowchartStrategy):
         Analyze the flowchart focused at: "{current_focus.description}".
         Return the Mermaid connection syntax and next nodes.
         
+        # Current Target
+        - ID: "{current_focus.suggested_id}"
+        - {loc_str}
+        
         # Rules
         1. Use ID format: `node_SanitizedText`
         2. If node exists in Context, reuse ID.
-        3. reasoning field can be null/empty.
+        3. `reasoning` field can be null/empty.
+        {spatial_rule}
 
-        # Context
+        # Context (Recent Path)
         {history_text}
 
         # Examples
@@ -47,7 +62,7 @@ class FastFlowchartStrategy(FlowchartStrategy):
         
         return vlm.query_structured(prompt, image_path, StepInterpretation)
 
-    def synthesize(self, vlm: BaseVLM, extracted_texts: List[str], step_history: List[StepInterpretation]) -> Tuple[str, str, TokenUsage]:
+    def synthesize(self, vlm: BaseVLM, image_path: str, extracted_texts: List[str], step_history: List[StepInterpretation]) -> Tuple[str, str, TokenUsage]:
         # Fastモードでは「AIによる清書（Refinement）」をスキップし、
         # 機械的に結合したものをそのまま返す（究極の高速化）
         
