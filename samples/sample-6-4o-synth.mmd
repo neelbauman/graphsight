@@ -1,0 +1,13 @@
+```mermaid
+graph TD
+    node_Unqualified_Lead --> node_Target_Marketing_Campaigns_Executed
+    node_Target_Marketing_Campaigns_Executed --> node_Valid_MQL
+    node_Valid_MQL -->|Yes| node_Sales_Development_Representative_Engages_with_prospect
+    node_Sales_Development_Representative_Engages_with_prospect --> node_Agrees_to_1st_discovery_call
+    node_Agrees_to_1st_discovery_call --> node_Account_Executive_Conducts_2nd_Discovery_Call
+    node_Account_Executive_Conducts_2nd_Discovery_Call --> node_Valid_SQL
+    node_Valid_SQL --> node_Is_there_an_opportunity
+    node_Is_there_an_opportunity --> node_Willing_to_Purchase
+    node_Willing_to_Purchase -->|Yes| node_Deal_Won
+    node_Willing_to_Purchase -->|No| node_Deal_lost
+```

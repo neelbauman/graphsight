@@ -1,0 +1,27 @@
+```mermaid
+graph TD
+    node_Start_Process("Start") --> node_Define_Job_Description("Define job description")
+    node_Define_Job_Description --> node_Request_Personnel_to_HR("Request personnel to HR")
+    node_Request_Personnel_to_HR --> node_Classify_Job_Hiring("Classify job hiring")
+    node_Classify_Job_Hiring --> node_Is_It_A_Regular_Process("Is it a regular process?")
+    node_Classify_Job_Hiring --> node_Create_Job_Posting("Create job posting")
+    node_Is_It_A_Regular_Process -->|Yes| node_Review_Previous_Candidate("Review previous candidate")
+    node_Is_It_A_Regular_Process -->|No| node_Special_Hiring_Process("Special hiring process")
+    node_Review_Previous_Candidate --> node_Is_the_Candidate_Suitable_for_the_Job("Is the candidate suitable for the job?")
+    node_Is_the_Candidate_Suitable_for_the_Job -->|Yes| node_Setup_Meeting_With_Candidate("Setup a meeting with candidate")
+    node_Is_the_Candidate_Suitable_for_the_Job -->|No| node_Make_Hiring_Plan("Make a hiring plan")
+    node_Make_Hiring_Plan --> node_Create_Job_Posting_Online("Create job posting online")
+    node_Create_Job_Posting_Online --> node_Collect_Submitted_Resumes("Collect submitted resumes")
+    node_Collect_Submitted_Resumes --> node_Is_It_A_Regular_Process_2("Is it a regular process?")
+    node_Is_It_A_Regular_Process_2 -->|No| node_Special_Hiring_Process
+    node_Create_Job_Posting --> node_Found_Suitable_Candidate("Found a suitable candidate?")
+    node_Found_Suitable_Candidate -->|Yes| node_Setup_Meeting_With_Candidate
+    node_Found_Suitable_Candidate -->|No| node_Review_Previous_Candidate
+    node_Setup_Meeting_With_Candidate --> node_Conduct_Initial_Interview("Conduct initial Interview")
+    node_Conduct_Initial_Interview --> node_List_All_Interview_Questions("List all interview questions")
+    node_List_All_Interview_Questions --> node_Conduct_Final_Interview("Conduct final Interview")
+    node_Conduct_Final_Interview --> node_Reference_Checked("Reference checked?")
+    node_Reference_Checked -->|Yes| node_Candidate_Accept_Offer("Candidate accept the offer?")
+    node_Reference_Checked -->|No| node_Conduct_Final_Interview_2("Conduct final Interview")
+    node_Candidate_Accept_Offer -->|Yes| node_Hire_the_Candidate("Hire the Candidate")
+```

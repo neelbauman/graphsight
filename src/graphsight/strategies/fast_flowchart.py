@@ -1,4 +1,6 @@
 from typing import List, Tuple
+
+from graphsight.llm.config import get_model_config
 from .flowchart import FlowchartStrategy
 from ..llm.base import BaseVLM
 from ..models import Focus, StepInterpretation, TokenUsage
@@ -12,9 +14,24 @@ class FastFlowchartStrategy(FlowchartStrategy):
     - AIによる最終清書をスキップし、Rawデータをそのまま返す。
     """
 
-    def interpret_step(self, vlm: BaseVLM, image_path: str, current_focus: Focus, context_history: List[str]) -> Tuple[StepInterpretation, TokenUsage]:
+    def interpret_step(self, vlm: BaseVLM, image_path: str, current_focus: Focus, context_history: List[StepInterpretation]) -> Tuple[StepInterpretation, TokenUsage]:
         # コンテキストは直近5件に絞ってトークン節約
-        history_text = "\n".join(context_history[-5:])
+        # --- NEW: Build History Text ---
+        # FlowchartStrategy のヘルパーを再利用しても良いが、
+        # Fastモードはトークン節約のため直近5件等の制約があるならここで制御
+        history_lines = []
+        for step in context_history[-5:]:
+            src = step.source_id or "Unknown"
+            for edge in step.outgoing_edges:
+                # Fast modeでもループ検知にGrid情報は必要なので注入する
+                meta = ""
+                if self.use_grid and edge.grid_refs:
+                    meta = f" %% Grid: {edge.grid_refs}"
+                
+                line = f"{src} --> {edge.target_id}{meta}"
+                history_lines.append(line)
+        
+        history_text = "\n".join(history_lines)
         
         # Gridモード判定とプロンプト注入
         if self.use_grid:
@@ -61,6 +78,40 @@ class FastFlowchartStrategy(FlowchartStrategy):
         """
         
         return vlm.query_structured(prompt, image_path, StepInterpretation)
+
+    def _build_history_text(self, history: List[StepInterpretation]) -> str:
+        """
+        過去のステップから 'NodeA --> NodeB (Grid: ...)' 形式のテキストを生成する。
+        LLMの推論用に、空間情報(Grid/BBox)をここで動的に注入する。
+        """
+        lines = []
+        # 直近15ステップのみ
+        recent_steps = history[-15:]
+        
+        for step in recent_steps:
+            src = step.source_id or "Unknown"
+            
+            for edge in step.outgoing_edges:
+                tgt = edge.target_id
+                label = f"|{edge.edge_label}|" if edge.edge_label else ""
+                
+                # 空間情報の注入
+                meta = ""
+                if self.use_grid:
+                    # Grid情報があれば付与
+                    refs = edge.grid_refs if edge.grid_refs else []
+                    if refs:
+                        meta = f" %% Grid: {refs}"
+                else:
+                    # BBox情報があれば付与
+                    bbox = edge.bbox if edge.bbox else []
+                    if bbox:
+                        meta = f" %% BBox: {bbox}"
+                
+                line = f"{src} -->{label} {tgt}{meta}"
+                lines.append(line)
+        
+        return "\n".join(lines)
 
     def synthesize(self, vlm: BaseVLM, image_path: str, extracted_texts: List[str], step_history: List[StepInterpretation]) -> Tuple[str, str, TokenUsage]:
         # Fastモードでは「AIによる清書（Refinement）」をスキップし、

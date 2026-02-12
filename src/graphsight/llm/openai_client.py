@@ -26,7 +26,10 @@ class OpenAIVLM(BaseVLM):
             encoded_string = base64.b64encode(image_file.read()).decode("utf-8")
         return {
             "type": "image_url",
-            "image_url": {"url": f"data:image/jpeg;base64,{encoded_string}"}
+            "image_url": {
+                "url": f"data:image/jpeg;base64,{encoded_string}",
+                "detail": "high",
+            }
         }
 
     def _extract_usage(self, completion) -> TokenUsage:
@@ -66,7 +69,7 @@ class OpenAIVLM(BaseVLM):
                 del params[excl]
         return params
 
-    @spot.mark(input_key_fn=ignore_self)
+    # @spot.mark(input_key_fn=ignore_self)
     def query_structured(self, prompt: str, image_path: str, response_model: Type[T]) -> Tuple[T, TokenUsage]:
         messages = self._prepare_messages(prompt, image_path)
         request_kwargs = self._build_request_params(messages=messages, response_format=response_model)
@@ -75,7 +78,7 @@ class OpenAIVLM(BaseVLM):
         completion = self.client.beta.chat.completions.parse(**request_kwargs)
         return completion.choices[0].message.parsed, self._extract_usage(completion)
 
-    @spot.mark(input_key_fn=ignore_self)
+    # @spot.mark(input_key_fn=ignore_self)
     def query_text(self, prompt: str, image_path: str | None = None) -> Tuple[str, TokenUsage]:
         messages = self._prepare_messages(prompt, image_path)
         request_kwargs = self._build_request_params(messages=messages)

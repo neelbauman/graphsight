@@ -1,48 +1,48 @@
 import typer
-from .api import GraphSight
+from pathlib import Path
+from .agent.core import GraphSightAgent
 
 app = typer.Typer()
 
 @app.command()
 def parse(
-    image_path: str, 
-    output: str = typer.Option(None, help="Output file path"),
-    format: str = typer.Option("mermaid", help="'mermaid' or 'natural_language'"),
-    model: str = typer.Option("gpt-4o", help="Model to use"),
-    grid: bool = typer.Option(False, "--grid", help="[Experimental] Use Grid SoM for spatial reasoning."),
-    strategy: str = typer.Option("standard", "--strategy", help="Strategy: 'standard', 'fast', or 'structured'"),
-    traversal: str = typer.Option("dfs", "--traversal", help="Traversal: 'dfs' (Depth-First) or 'bfs' (Breadth-First)")
+    image_path: str = typer.Argument(..., help="Path to the flowchart image"),
+    output: str = typer.Option(None, "--output", "-o", help="Output file path (.mmd)"),
+    model: str = typer.Option("gpt-4o", help="OpenAI Model to use"),
 ):
-    try:
-        sight = GraphSight(model=model)
-        
-        # パラメータを受け渡す
-        result = sight.interpret(
-            image_path, 
-            format=format, 
-            experimental_grid=grid,
-            strategy_mode=strategy,
-            traversal_mode=traversal
-        )
-        
-        typer.echo(f"\n✨ --- AI Refined Result ---")
-        typer.echo(result.content)
+    """
+    Interpret a flowchart image and convert it to Mermaid.js code.
+    Uses an autonomous agent with computer vision capabilities (GraphSight Agent).
+    """
+    if not Path(image_path).exists():
+        typer.secho(f"Error: Image file not found at {image_path}", fg=typer.colors.RED)
+        raise typer.Exit(code=1)
 
-        typer.echo(f"\n🔧 --- Raw Mechanical Result ---")
-        typer.echo(result.raw_content)
+    try:
+        # エージェントの初期化
+        typer.echo(f"🤖 Initializing GraphSight Agent with {model}...")
+        agent = GraphSightAgent(model=model)
         
-        typer.echo("\n📊 --- Usage & Cost ---")
-        typer.echo(f"Model: {result.model_name}")
-        typer.echo(f"Total Tokens: {result.usage.total_tokens:,} (In: {result.usage.input_tokens:,}, Out: {result.usage.output_tokens:,})")
-        typer.echo(f"Estimated Cost: ${result.cost_usd:.4f}")
+        typer.echo(f"👀 Analyzing {image_path}...")
+        typer.echo("   (The agent is planning and inspecting the diagram...)")
         
+        # エージェント実行 (Plan -> Think -> Tool -> Finish)
+        mermaid_code = agent.run(image_path)
+        
+        # 結果出力
+        typer.echo(f"\n✨ --- Generated Mermaid Code ---")
+        typer.echo(mermaid_code)
+        
+        # ファイル保存
         if output:
-            with open(output, "w") as f:
-                f.write(result.content)
-            typer.echo(f"\nSaved refined result to {output}")
+            output_path = Path(output)
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            output_path.write_text(mermaid_code, encoding="utf-8")
+            typer.echo(f"\n💾 Saved result to {output_path}")
             
     except Exception as e:
-        typer.secho(f"Error: {e}", fg=typer.colors.RED)
+        typer.secho(f"\n❌ Processing failed: {e}", fg=typer.colors.RED)
+        raise typer.Exit(code=1)
 
 if __name__ == "__main__":
     app()

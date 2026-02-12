@@ -2,9 +2,14 @@ import base64
 import math
 import string
 import os
+import tempfile
+import re
+
+
 from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont
-from typing import Tuple
+from typing import List, Tuple
+
 
 def encode_image_to_base64(image_path: str) -> str:
     path = Path(image_path)
@@ -110,4 +115,140 @@ def add_grid_overlay(image_path: str, min_cell_size: int = 150) -> Tuple[str, in
         out.save(output_path)
         
         return output_path, rows, cols
+
+
+def crop_connection_area(image_path: str, bbox_a: List[int], bbox_b: List[int], padding: int = 50) -> str:
+    """
+    2つのノード(BBox [ymin, xmin, ymax, xmax]) を含む矩形領域を切り出し、
+    一時ファイルのパスを返す。
+    """
+    try:
+        with Image.open(image_path) as img:
+            w, h = img.size
+            
+            # 0-1000 scale to pixels
+            def to_px(bbox):
+                return [
+                    int(bbox[1] * w / 1000), # xmin
+                    int(bbox[0] * h / 1000), # ymin
+                    int(bbox[3] * w / 1000), # xmax
+                    int(bbox[2] * h / 1000)  # ymax
+                ]
+            
+            b1 = to_px(bbox_a)
+            b2 = to_px(bbox_b)
+            
+            # Union Rectangle
+            x_min = max(0, min(b1[0], b2[0]) - padding)
+            y_min = max(0, min(b1[1], b2[1]) - padding)
+            x_max = min(w, max(b1[2], b2[2]) + padding)
+            y_max = min(h, max(b1[3], b2[3]) + padding)
+            
+            # Crop
+            cropped = img.crop((x_min, y_min, x_max, y_max))
+            
+            # --- FIX: RGBA -> RGB Conversion ---
+            # JPEGは透明度(Alpha)をサポートしていないため、RGBに変換する
+            if cropped.mode in ("RGBA", "P"):
+                cropped = cropped.convert("RGB")
+            
+            # Save temp
+            tf = tempfile.NamedTemporaryFile(suffix=".jpg", delete=False)
+            cropped.save(tf.name, quality=95)
+            return tf.name
+
+    except Exception as e:
+        # 失敗時は元の画像を返す（フォールバック）
+        # logger等があればログ出力推奨
+        print(f"Crop failed: {e}")
+        return image_path
+
+
+def parse_grid_ref(ref: str) -> Tuple[int, int]:
+    """
+    "A1" -> (0, 0), "B2" -> (1, 1)
+    Returns (row_index, col_index)
+    """
+    match = re.match(r"([A-Z]+)(\d+)", ref.upper())
+    if not match:
+        return (0, 0)
+    
+    row_str, col_str = match.groups()
+    
+    row_idx = 0
+    for char in row_str:
+        row_idx = row_idx * 26 + (ord(char) - ord('A') + 1)
+    row_idx -= 1
+    
+    col_idx = int(col_str) - 1
+    
+    return row_idx, col_idx
+
+def crop_grid_area(
+    image_path: str, 
+    grid_refs_a: List[str], 
+    grid_refs_b: List[str], 
+    total_rows: int, 
+    total_cols: int,
+    margin_cells: int = 1  # <-- NEW: 周囲何マス分広げるか (デフォルト1=周辺8マスを含む)
+) -> str:
+    """
+    Grid参照リストに基づき、2つのノードを含む領域＋周囲のグリッドセルをマージンとして切り出す。
+    """
+    try:
+        with Image.open(image_path) as img:
+            w, h = img.size
+            
+            # 1セルあたりのピクセルサイズ
+            cell_w = w / total_cols
+            cell_h = h / total_rows
+            
+            # 全ての関連グリッドを集める
+            all_refs = (grid_refs_a or []) + (grid_refs_b or [])
+            
+            if not all_refs:
+                # 参照がない場合は画像全体を返すなどの安全策
+                return image_path
+            
+            # 最小/最大インデックスを計算
+            rows = []
+            cols = []
+            for ref in all_refs:
+                r, c = parse_grid_ref(ref)
+                rows.append(r)
+                cols.append(c)
+            
+            min_r, max_r = min(rows), max(rows)
+            min_c, max_c = min(cols), max(cols)
+            
+            # --- Grid Margin Expansion ---
+            # 指定されたセル数分だけインデックスを広げる（画像の範囲内に収める）
+            min_r = max(0, min_r - margin_cells)
+            max_r = min(total_rows - 1, max_r + margin_cells)
+            
+            min_c = max(0, min_c - margin_cells)
+            max_c = min(total_cols - 1, max_c + margin_cells)
+            # -----------------------------
+            
+            # ピクセル座標へ変換
+            # x_max, y_max は「次のセルの開始位置」なので +1 していることに注意
+            x_min = int(min_c * cell_w)
+            y_min = int(min_r * cell_h)
+            x_max = int((max_c + 1) * cell_w)
+            y_max = int((max_r + 1) * cell_h)
+            
+            # クロップ実行
+            cropped = img.crop((x_min, y_min, x_max, y_max))
+            
+            # JPEG互換処理
+            if cropped.mode in ("RGBA", "P"):
+                cropped = cropped.convert("RGB")
+                
+            tf = tempfile.NamedTemporaryFile(suffix=".jpg", delete=False)
+            cropped.save(tf.name, quality=95)
+            return tf.name
+
+    except Exception as e:
+        print(f"Grid Crop failed: {e}")
+        return image_path
 

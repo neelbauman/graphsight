@@ -4,7 +4,10 @@ from typing import Dict, Any, Set
 from enum import Enum
 from beautyspot import Spot
 
-spot = Spot("graphsight-engine")
+spot = Spot(
+    "graphsight-engine-6",
+    default_version="3",
+)
 
 
 class ModelType(str, Enum):

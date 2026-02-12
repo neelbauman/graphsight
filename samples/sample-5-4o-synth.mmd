@@ -1,0 +1,32 @@
+```mermaid
+graph TD
+    node_Start_Terminator("Start") -->|YES| node_Decision_1("Decision 1")
+    node_Start_Terminator -->|NO| node_Decision_a("Decision a")
+    
+    node_Decision_1 -->|YES| node_Step_1("Step 1")
+    node_Decision_1 -->|NO| node_Decision_2("Decision 2")
+    
+    node_Decision_2 -->|YES| node_Decision_3("Decision 3")
+    node_Decision_2 -->|NO| node_Decision_4("Decision 4")
+    
+    node_Decision_3 -->|YES| node_Step_4("Step 4")
+    node_Decision_3 -->|NO| node_Step_3("Step 3")
+    
+    node_Decision_4 -->|YES| node_Step_2("Step 2")
+    node_Decision_4 -->|NO| node_Step_3_2("Step 3")
+    
+    node_Decision_a -->|YES| node_Decision_b("Decision b")
+    node_Decision_a -->|NO| node_Decision_c("Decision c")
+    
+    node_Decision_b -->|YES| node_Step_a("Step a")
+    node_Decision_b -->|NO| node_Decision_d("Decision d")
+    
+    node_Decision_c -->|YES| node_Step_b("Step b")
+    node_Decision_c -->|NO| node_Decision_e("Decision e")
+    
+    node_Decision_e -->|NO| node_Step_f("Step f")
+    
+    node_Step_2 --> node_Step_3
+    node_Step_a --> node_Step_c("Step c")
+    node_Step_b --> node_Decision_d
+```
