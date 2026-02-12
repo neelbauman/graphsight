@@ -345,15 +345,12 @@ class MermaidParser:
             if m:
                 src_text = m.group(1).strip()
                 dst_text = m.group(2).strip()
-                # チェーン防止: srcにまだ矢印が含まれている場合は
-                # チェーン行として分解する
-                if cls._contains_arrow(src_text):
+                # src OR dst にまだ矢印が含まれている場合はチェーン行
+                if cls._contains_arrow(src_text) or cls._contains_arrow(dst_text):
                     return cls._parse_chained_edges(line, graph)
                 src = cls._parse_node_ref(src_text, graph)
                 dst = cls._parse_node_ref(dst_text, graph)
-                graph.edges.append(Edge(
-                    src=src, dst=dst, style=arrow_style
-                ))
+                graph.edges.append(Edge(src=src, dst=dst, style=arrow_style))
                 return True
 
         return False
@@ -460,10 +457,10 @@ class MermaidParser:
 
 class GraphSightAgent:
 
-    MAX_REFINE_CHECKS = 8   # Refineフェーズで確認する疑問点の上限
+    MAX_REFINE_CHECKS = 20   # Refineフェーズで確認する疑問点の上限
     CROP_MARGIN_RATIO = 0.5  # crop座標に追加するマージン比率
 
-    def __init__(self, model: str = "gpt-5"):
+    def __init__(self, model: str = "gpt-5.2"):
         try:
             self.llm = ChatOpenAI(model=model, temperature=0, reasoning_effort="high")
         except Exception:
@@ -524,13 +521,13 @@ Output ONLY this JSON (no other text):
   "confidence": 0.85,
   "uncertain_points": [
     {{
-      "id": "Unknown1",
-      "description": "Cannot read the label in the diamond shape clearly — looks like 'Valid?' or 'Value?'",
+      "id": "U1",
+      "description": "Unsure how may arrows go from Node C, in Mermaid I suggest 2 lines.",
       "location": "center-right area",
       "crop_x": 400, "crop_y": 300, "crop_w": 200, "crop_h": 150
     }},
     {{
-      "id": "Unknown2",
+      "id": "U2",
       "description": "Faint arrow — unsure if node E connects to F or G",
       "location": "bottom-left",
       "crop_x": 50, "crop_y": 500, "crop_w": 250, "crop_h": 200
@@ -542,14 +539,13 @@ Output ONLY this JSON (no other text):
 - Use actual newlines (\\n) to separate lines.
 - Reproduce the flowchart structure as accurately as possible.
 - For unclear labels, write your best guess.
-- Use descriptive, semantic Node IDs based on the label text (e.g., A_Start_Process, B_Check_Error). DO NOT use just generic IDs like A1, Node1, etc.
 
 **Rules for uncertain_points:**
-- List ONLY genuinely uncertain items (unclear text, faint lines, ambiguous connections).
-- Do NOT list things you can clearly see.
+- List ONLY genuinely uncertain items (unclear if Label or Node, complex lines, faint lines, ambiguous connections).
+- Do NOT Miss list things.
 - For each point, provide crop coordinates (x, y, w, h) in the original image where you'd want to zoom in.
 - Coordinates must be within image bounds ({img_w}x{img_h}).
-- Maximum 8 uncertainty points.
+- Max 20 Items.
 
 **Rules for confidence:**
 - 0.9+ = all labels readable, all connections clear
