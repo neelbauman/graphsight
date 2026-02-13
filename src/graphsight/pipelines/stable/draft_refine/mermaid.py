@@ -1,4 +1,5 @@
 import re
+from loguru import logger
 from .models import (
     GraphStructure,
     Node,
@@ -11,12 +12,12 @@ class MermaidParser:
 
     # ノード形状の検出パターン（マッチ順序が重要：長いパターンを先に）
     SHAPE_PATTERNS = [
-        (r'\(\[(.+?)\]\)', 'stadium'),
-        (r'\(\((.+?)\)\)', 'circle'),
-        (r'\{\{(.+?)\}\}', 'hex'),
-        (r'\{(.+?)\}',     'diamond'),
-        (r'\[(.+?)\]',     'rect'),
-        (r'\((.+?)\)',     'round'),
+        (r'\(\[((?:.|\\n)+?)\]\)', 'stadium'), # ([...])
+        (r'\(\(((?:.|\\n)+?)\)\)', 'circle'),  # ((...))
+        (r'\{\{((?:.|\\n)+?)\}\}', 'hex'),     # {{...}}
+        (r'\{((?:.|\\n)+?)\}',     'diamond'), # {...}
+        (r'\[((?:.|\\n)+?)\]',     'rect'),    # [...]
+        (r'\(((?:.|\\n)+?)\)',     'round'),   # (...)
     ]
 
     # 矢印パターン（マッチ順序が重要：長いパターンを先に）
@@ -58,6 +59,8 @@ class MermaidParser:
         graph = GraphStructure()
         lines = code.strip().splitlines()
 
+        fallback_events = []
+
         for line in lines:
             stripped = cls._preprocess_line(line.strip())
 
@@ -86,12 +89,17 @@ class MermaidParser:
                 continue
 
             # エッジ行を試す
-            edge_parsed = cls._try_parse_edge(stripped, graph)
+            edge_parsed = cls._try_parse_edge(stripped, graph, fallback_events)
             if edge_parsed:
                 continue
 
             # 単独ノード宣言を試す
             cls._try_parse_standalone_node(stripped, graph)
+
+        if fallback_events:
+            logger.warning(f"⚠️  MermaidParser triggered fallback for {len(fallback_events)} items:")
+            for text in fallback_events:
+                logger.warning(f"   - Fallback input: '{text}'")
 
         return graph
 
@@ -109,7 +117,7 @@ class MermaidParser:
     ]
 
     @classmethod
-    def _try_parse_edge(cls, line: str, graph: GraphStructure) -> bool:
+    def _try_parse_edge(cls, line: str, graph: GraphStructure, fallback_events: list) -> bool:
         """エッジ行をパースする。3つの構文をサポート:
         1. A -->|label| B      (パイプ構文)
         2. A -- label --> B    (インラインラベル構文)
@@ -122,9 +130,9 @@ class MermaidParser:
         for pattern, arrow_style in cls.INLINE_LABEL_PATTERNS:
             m = re.match(pattern, line)
             if m:
-                src = cls._parse_node_ref(m.group(1).strip(), graph)
+                src = cls._parse_node_ref(m.group(1).strip(), graph, fallback_events)
                 edge_label = m.group(2).strip()
-                dst = cls._parse_node_ref(m.group(3).strip(), graph)
+                dst = cls._parse_node_ref(m.group(3).strip(), graph, fallback_events)
                 graph.edges.append(Edge(
                     src=src, dst=dst, label=edge_label, style=arrow_style
                 ))
@@ -135,9 +143,9 @@ class MermaidParser:
             pattern = rf'^(.+?)\s*{arrow_re}\s*\|(.+?)\|\s*(.+)$'
             m = re.match(pattern, line)
             if m:
-                src = cls._parse_node_ref(m.group(1).strip(), graph)
+                src = cls._parse_node_ref(m.group(1).strip(), graph, fallback_events)
                 edge_label = m.group(2).strip()
-                dst = cls._parse_node_ref(m.group(3).strip(), graph)
+                dst = cls._parse_node_ref(m.group(3).strip(), graph, fallback_events)
                 graph.edges.append(Edge(
                     src=src, dst=dst, label=edge_label, style=arrow_style
                 ))
@@ -152,9 +160,9 @@ class MermaidParser:
                 dst_text = m.group(2).strip()
                 # src OR dst にまだ矢印が含まれている場合はチェーン行
                 if cls._contains_arrow(src_text) or cls._contains_arrow(dst_text):
-                    return cls._parse_chained_edges(line, graph)
-                src = cls._parse_node_ref(src_text, graph)
-                dst = cls._parse_node_ref(dst_text, graph)
+                    return cls._parse_chained_edges(line, graph, fallback_events)
+                src = cls._parse_node_ref(src_text, graph, fallback_events)
+                dst = cls._parse_node_ref(dst_text, graph, fallback_events)
                 graph.edges.append(Edge(src=src, dst=dst, style=arrow_style))
                 return True
 
@@ -169,7 +177,7 @@ class MermaidParser:
         return False
 
     @classmethod
-    def _parse_chained_edges(cls, line: str, graph: GraphStructure) -> bool:
+    def _parse_chained_edges(cls, line: str, graph: GraphStructure, fallback_events: list | None = None) -> bool:
         """A --> B --> C のようなチェーンを複数エッジに分解する"""
         # 矢印で分割
         parts = []
@@ -196,7 +204,7 @@ class MermaidParser:
             return False
 
         # 連続するノードペアをエッジとして登録
-        node_ids = [cls._parse_node_ref(p, graph) for p in parts]
+        node_ids = [cls._parse_node_ref(p, graph, fallback_events) for p in parts]
         for i in range(len(node_ids) - 1):
             style = arrows[i] if i < len(arrows) else "-->"
             graph.edges.append(Edge(src=node_ids[i], dst=node_ids[i + 1], style=style))
@@ -204,20 +212,58 @@ class MermaidParser:
         return True
 
     @classmethod
-    def _parse_node_ref(cls, text: str, graph: GraphStructure) -> str:
+    def _parse_node_ref(cls, text: str, graph: GraphStructure, fallback_events: list = None) -> str:
         """'A[Some Label]' → ノード登録してIDを返す。'A' だけなら既存参照。"""
+        
+        # 1. Strict Parsing (厳密な正規表現: 閉じカッコあり)
         for pattern, shape in cls.SHAPE_PATTERNS:
-            # ID + shape: "A[Label]"
+            # 改行またぎ対応の正規表現 ((?:.|\\n)+?) を使用
             m = re.match(rf'^([A-Za-z_]\w*)\s*' + pattern + r'$', text)
             if m:
                 nid = m.group(1)
-                label = m.group(2).strip()
-                # 初出時のみ登録（最初のラベルを正とする）
+                raw_label = m.group(2).strip()
+                # クォート除去 ("label" -> label)
+                if (raw_label.startswith('"') and raw_label.endswith('"')) or \
+                   (raw_label.startswith("'") and raw_label.endswith("'")):
+                    label = raw_label[1:-1]
+                else:
+                    label = raw_label
+                
                 if nid not in graph.nodes:
                     graph.nodes[nid] = Node(id=nid, label=label, shape=shape)
                 return nid
 
-        # IDのみ（形状なし）
+        # 2. Heuristic Parsing (救済措置: 閉じカッコ欠損/改行分割への対応)
+        # 例: "R[電話会社に" (ここで改行されて切れている)
+        # 開始カッコのパターン: ([Or (( Or {{ Or { Or [ Or (
+        heuristic_match = re.match(r'^([A-Za-z_]\w*)\s*(\(\[|\(\(|\{\{|\{|\[|\()((?:.|\\n)*)', text)
+        if heuristic_match:
+            nid = heuristic_match.group(1)
+            bracket = heuristic_match.group(2)
+            raw_content = heuristic_match.group(3).strip()
+            
+            # 末尾のゴミ（閉じカッコの断片など）があれば除去
+            label = re.sub(r'(\]\)|\]|\)\)|\}|\}\})$', '', raw_content)
+
+            # クォート除去
+            if (label.startswith('"') and label.endswith('"')) or \
+               (label.startswith("'") and label.endswith("'")):
+                label = label[1:-1]
+
+            # 開始カッコから形状を決定
+            shape_map = {
+                "([": "stadium", "((": "circle", "{{": "hex", 
+                "{": "diamond", "[": "rect", "(": "round"
+            }
+            shape = shape_map.get(bracket, "rect")
+            
+            if nid not in graph.nodes:
+                # ログで救済を通知（デバッグ用）
+                # logger.debug(f"🔧 Heuristically parsed node: {nid}[{label}...] (incomplete line)")
+                graph.nodes[nid] = Node(id=nid, label=label, shape=shape)
+            return nid
+
+        # 3. IDのみ (形状なし)
         m = re.match(r'^([A-Za-z_]\w*)$', text.strip())
         if m:
             nid = m.group(1)
@@ -225,9 +271,7 @@ class MermaidParser:
                 graph.nodes[nid] = Node(id=nid, label=nid, shape="rect")
             return nid
 
-        # テキストがエッジラベル残骸を含んでいる場合
-        # (例: "E -- 任意開示確実" "D --|開示も求める|")
-        # 先頭のIDだけを抽出する
+        # エッジラベル残骸処理 (例: "E -- text")
         m = re.match(r'^([A-Za-z_]\w*)\s*--', text)
         if m:
             nid = m.group(1)
@@ -235,7 +279,10 @@ class MermaidParser:
                 graph.nodes[nid] = Node(id=nid, label=nid, shape="rect")
             return nid
 
-        # パースできない場合 → テキスト自体をサニタイズしてIDにする
+        # 4. Fallback (最終手段: 強制ID化)
+        if fallback_events is not None:
+            fallback_events.append(text)
+
         safe_id = re.sub(r'[^A-Za-z0-9_]', '_', text)[:20]
         if not safe_id or safe_id[0].isdigit():
             safe_id = "N_" + safe_id

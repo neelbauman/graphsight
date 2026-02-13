@@ -50,9 +50,17 @@ from loguru import logger
 
 from .tools import ImageProcessor
 from ...base import BasePipeline
+from .mermaid import MermaidParser
+from .models import (
+    Node,
+    Edge,
+    GraphStructure,
+    UncertainPoint,
+    DraftResult,
+)
 
 
-class GraphSightAgent:
+class DraftRefinePipeline(BasePipeline):
 
     MAX_REFINE_CHECKS = 20   # Refineフェーズで確認する疑問点の上限
     CROP_MARGIN_RATIO = 0.5  # crop座標に追加するマージン比率
@@ -136,9 +144,10 @@ Output ONLY this JSON (no other text):
 - Use actual newlines (\\n) to separate lines.
 - Reproduce the flowchart structure as accurately as possible.
 - For unclear labels, write your best guess.
+- **CRITICAL: Transcribe the text inside the node exactly. Do NOT use the node ID as the label. (e.g. Write A[Select Option], NOT A[A], NOT A[SO])**
 
 **Rules for uncertain_points:**
-- List ONLY genuinely uncertain items (unclear if Label or Node, complex lines, faint lines, ambiguous connections).
+- List ONLY genuinely uncertain items (unclear if Edge label or Node, complex lines, faint lines, ambiguous connections).
 - Do NOT Miss list things.
 - For each point, provide crop coordinates (x, y, w, h) in the original image where you'd want to zoom in.
 - Coordinates must be within image bounds ({img_w}x{img_h}).
@@ -162,7 +171,8 @@ Output ONLY this JSON (no other text):
 
         mermaid_raw = data.get("mermaid", "")
         # エスケープされた改行を実際の改行に変換
-        mermaid_code = mermaid_raw.replace("\\n", "\n")
+        # mermaid_code = mermaid_raw.replace("\\n", "\n")
+        mermaid_code = mermaid_raw
 
         uncertain_points = []
         for u in data.get("uncertain_points", [])[:self.MAX_REFINE_CHECKS]:
@@ -544,20 +554,4 @@ Look carefully and answer:
     @staticmethod
     def _clamp(val, lo, hi):
         return max(lo, min(int(val), hi))
-
-
-# =============================================================================
-# CLI
-# =============================================================================
-
-if __name__ == "__main__":
-    import sys
-    if len(sys.argv) < 2:
-        print("Usage: python core.py <image_path>")
-        sys.exit(1)
-
-    agent = GraphSightAgent()
-    result = agent.run(sys.argv[1])
-    print(f"\n{'='*60}")
-    print(f"```mermaid\n{result}\n```")
 

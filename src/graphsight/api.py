@@ -1,61 +1,76 @@
 import os
-from loguru import logger
+from pathlib import Path
+from typing import Optional, Literal
+
 from dotenv import load_dotenv
-from .llm.openai_client import OpenAIVLM
-from .core.engine import GraphInterpreter
-from .strategies.flowchart import FlowchartStrategy
-from .strategies.fast_flowchart import FastFlowchartStrategy
-from .strategies.structured import StructuredFlowchartStrategy
-from .classifier.detector import DiagramDetector
-from .models import OutputFormat, DiagramResult
+from loguru import logger
+
+# New Pipeline Architecture
+from .pipelines.stable.draft_refine import DraftRefinePipeline
+
+# Experimental Pipelines (必要に応じてコメントアウトを外して使えるように準備)
+# from .pipelines.experimental.agentic import AgenticPipeline
+# from .pipelines.experimental.ensemble import EnsemblePipeline
 
 load_dotenv()
 
 class GraphSight:
-    def __init__(self, api_key: str | None = None, model: str = "gpt-4o"):
-        key = api_key or os.getenv("OPENAI_API_KEY")
-        if not key:
-            raise ValueError("API Key is missing.")
+    """
+    GraphSight API Client.
+    
+    This class provides a high-level interface to the GraphSight pipelines.
+    By default, it uses the stable 'Draft -> Refine' architecture.
+    """
+
+    def __init__(self, model: str = "gpt-4o", api_key: Optional[str] = None):
+        """
+        Initialize GraphSight client.
+
+        Args:
+            model (str): The OpenAI model to use (default: "gpt-4o").
+            api_key (Optional[str]): OpenAI API Key. If None, uses OPENAI_API_KEY env var.
+        """
+        if api_key:
+            os.environ["OPENAI_API_KEY"] = api_key
         
-        self.vlm = OpenAIVLM(api_key=key, model=model)
-        self.engine = GraphInterpreter(self.vlm)
-        self.detector = DiagramDetector(self.vlm)
+        if not os.getenv("OPENAI_API_KEY"):
+            logger.warning("⚠️ OPENAI_API_KEY is not set. API calls may fail.")
+
+        self.model = model
+        # デフォルトでStableパイプラインを初期化
+        self.pipeline = DraftRefinePipeline(model=model)
 
     def interpret(
         self, 
         image_path: str, 
-        format: str = "mermaid", 
-        experimental_grid: bool = False, 
-        strategy_mode: str = "standard",
-        traversal_mode: str = "dfs"
-    ) -> DiagramResult:
-        
-        try:
-            output_fmt = OutputFormat(format)
-        except ValueError:
-            output_fmt = OutputFormat.MERMAID
+        pipeline: Literal["standard"] = "standard"
+    ) -> str:
+        """
+        Interpret a flowchart image and convert it to Mermaid code.
 
-        detected_type, detector_usage = self.detector.detect(image_path)
+        Args:
+            image_path (str): Path to the image file.
+            pipeline (str): Pipeline strategy to use. Currently only "standard" is fully supported via API.
+
+        Returns:
+            str: Generated Mermaid diagram code.
+        """
+        path = Path(image_path)
+        if not path.exists():
+            raise FileNotFoundError(f"Image not found: {image_path}")
+
+        # 将来的な拡張性: pipeline引数で実験的パイプラインに切り替え可能にする余地を残す
+        if pipeline != "standard":
+            logger.warning(f"Pipeline '{pipeline}' is not currently exposed via standard API. Using standard.")
+
+        # 実行
+        logger.info(f"🚀 GraphSight processing: {path.name} (Model: {self.model})")
+        mermaid_code = self.pipeline.run(str(path))
         
-        # Strategy Selection
-        strategy = None
-        if strategy_mode == "fast":
-            logger.info("🐇 Using FastFlowchartStrategy (Few-Shot Mode)")
-            strategy = FastFlowchartStrategy(output_format=output_fmt, use_grid=experimental_grid)
-        elif strategy_mode == "structured":
-            logger.info("🏗️ Using StructuredFlowchartStrategy (JSON Extraction Mode)")
-            # StructuredもGridを受け取るようにする（BaseStrategyにはないが、Duck typingで渡す、あるいはコンストラクタで受ける）
-            # 今回のStructuredFlowchartStrategy実装では use_grid を明示的に属性セットする
-            strategy = StructuredFlowchartStrategy(output_format=output_fmt)
-            strategy.use_grid = experimental_grid # 属性注入
-        else:
-            logger.info("🐢 Using Standard FlowchartStrategy (Reasoning Mode)")
-            strategy = FlowchartStrategy(output_format=output_fmt, use_grid=experimental_grid)
-        
-        return self.engine.process(
-            image_path, 
-            strategy, 
-            initial_usage=detector_usage,
-            traversal_mode=traversal_mode
-        )
+        return mermaid_code
+
+# 関数ベースで手軽に使いたい場合のためのショートカット
+def interpret(image_path: str, model: str = "gpt-4o") -> str:
+    client = GraphSight(model=model)
+    return client.interpret(image_path)
 

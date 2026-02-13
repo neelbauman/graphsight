@@ -1,12 +1,11 @@
 import typer
 from enum import Enum
 from pathlib import Path
-from typing import Optional
 
 # Pipelines
 from .pipelines.stable.draft_refine import DraftRefinePipeline
-from .pipelines.experimental.agentic import AgenticPipeline
-from .pipelines.experimental.ensemble import EnsemblePipeline
+# from .pipelines.experimental.agentic import AgenticPipeline
+# from .pipelines.experimental.ensemble import EnsemblePipeline
 # from .pipelines.experimental.crawling import CrawlingPipeline # 必要ならimport
 
 app = typer.Typer()
@@ -20,8 +19,13 @@ class PipelineType(str, Enum):
     EXP_ENSEMBLE = "exp-ensemble"
     EXP_CRAWL = "exp-crawl"
 
-@app.command()
-def parse(
+@app.callback()
+def _callback():
+    # 何もしない（Believe it or not: これが効く）
+    pass
+
+@app.command("parse")
+def parse_cmd(
     image_path: str = typer.Argument(..., help="Path to the flowchart image"),
     output: str = typer.Option(None, "--output", "-o", help="Output file path (.mmd)"),
     model: str = typer.Option("gpt-4o", help="OpenAI Model to use"),
@@ -47,9 +51,11 @@ def parse(
         if pipeline == PipelineType.STANDARD:
             runner = DraftRefinePipeline(model=model)
         elif pipeline == PipelineType.EXP_AGENT:
-            runner = AgenticPipeline(model=model)
+            # runner = AgenticPipeline(model=model)
+            pass
         elif pipeline == PipelineType.EXP_ENSEMBLE:
-            runner = EnsemblePipeline(model=model)
+            # runner = EnsemblePipeline(model=model)
+            pass
         elif pipeline == PipelineType.EXP_CRAWL:
             # runner = CrawlingPipeline(model=model)
             typer.secho("Experimental Crawl pipeline is under maintenance.", fg=typer.colors.RED)

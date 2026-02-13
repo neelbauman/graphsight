@@ -10,10 +10,16 @@ from langgraph.graph.message import add_messages
 from langgraph.checkpoint.memory import MemorySaver
 from loguru import logger
 
+# Base Class
+from ...base import BasePipeline
+
+# Tools (Stableパイプラインのツールを再利用)
+# もし実験専用ツールがある場合は src/graphsight/tools/experimental/vision.py などからインポート
 try:
-    from .tools import ALL_TOOLS
+    from ...stable.draft_refine.tools import ALL_TOOLS
 except ImportError:
-    from agent.tools import ALL_TOOLS
+    # 開発中のパス解決用フォールバック
+    from graphsight.pipelines.stable.draft_refine.tools import ALL_TOOLS
 
 
 class AgentState(TypedDict):
@@ -21,12 +27,15 @@ class AgentState(TypedDict):
     step_count: int
 
 
-class GraphSightAgent:
+class AgenticPipeline(BasePipeline):
+    """
+    Experimental Agentic Pipeline using LangGraph.
+    Phased execution: Overview -> Node Extraction -> Edge Tracing -> Validation
+    """
+    
     MAX_TOOL_STEPS = 30
-    FORCE_THOUGHT_INTERVAL = 3  # 5→3 に短縮: より頻繁に思考させる
+    FORCE_THOUGHT_INTERVAL = 3
     SOFT_LIMIT_STEP = 20
-
-    # フェーズ境界ステップ (Overview→NodeExtraction→EdgeTracing→Validation)
     PHASE_BOUNDARIES = (2, 8, 15)
 
     def __init__(self, model: str = "gpt-4o"):
@@ -89,6 +98,55 @@ Your Goal: Reproduce the flowchart in the image as Mermaid code.
 - Total tool budget: ~20 calls. Use them wisely.
 """
         self.graph = self._build_graph()
+
+    def run(self, image_path: str) -> str:
+        """BasePipeline.run の実装"""
+        logger.info(f"🚀 [Agentic Pipeline] Starting run for: {image_path}")
+
+        initial_content = self._create_image_content(
+            image_path,
+            f"Analyze the flowchart. File path: '{image_path}'.\nThis is the full overview image."
+        )
+        initial_message = HumanMessage(content=initial_content)
+
+        inputs = {"messages": [initial_message], "step_count": 0}
+        config = {
+            "configurable": {"thread_id": "session_v6"},
+            "recursion_limit": 80
+        }
+
+        final_response = ""
+
+        try:
+            for event in self.graph.stream(inputs, config=config, stream_mode="values"):
+                if "messages" in event:
+                    msg = event["messages"][-1]
+                    if isinstance(msg, AIMessage):
+                        if msg.tool_calls:
+                            target = msg.tool_calls[0]
+                            logger.info(f"🤖 Plan: {target['name']} args={target['args']}")
+                        else:
+                            # 途中経過の思考もログに出す
+                            logger.debug(f"🤖 Thought: {msg.content[:100]}...")
+                            final_response = msg.content
+        except Exception as e:
+            logger.error(f"Execution Error: {e}")
+            raise e
+
+        # Mermaidコードブロックの抽出
+        return self._extract_mermaid(final_response)
+
+    def _extract_mermaid(self, text: str) -> str:
+        if "```mermaid" in text:
+            return text.split("```mermaid")[1].split("```")[0].strip()
+        if "```" in text:
+            parts = text.split("```")
+            if len(parts) >= 2:
+                return parts[1].strip()
+        logger.warning("⚠️ No mermaid block found in final response.")
+        return text
+
+
 
     def _build_graph(self):
         workflow = StateGraph(AgentState)
@@ -361,46 +419,4 @@ If you have enough information, output the ```mermaid diagram now.
             ]
         except Exception as e:
             return f"Error loading image: {e}"
-
-    def run(self, image_path: str) -> str:
-        logger.info(f"Agent starting run for: {image_path}")
-
-        initial_content = self._create_image_content(
-            image_path,
-            f"Analyze the flowchart. File path: '{image_path}'.\nThis is the full overview image."
-        )
-        initial_message = HumanMessage(content=initial_content)
-
-        inputs = {"messages": [initial_message], "step_count": 0}
-        config = {
-            "configurable": {"thread_id": "session_v6"},
-            "recursion_limit": 80
-        }
-
-        final_response = ""
-
-        try:
-            for event in self.graph.stream(inputs, config=config, stream_mode="values"):
-                if "messages" in event:
-                    msg = event["messages"][-1]
-                    if isinstance(msg, AIMessage):
-                        if msg.tool_calls:
-                            target = msg.tool_calls[0]
-                            logger.info(f"🤖 Plan: {target['name']} args={target['args']}")
-                        else:
-                            logger.debug(f"🤖 Output: {msg.content[:200]}...")
-                            final_response = msg.content
-        except Exception as e:
-            logger.error(f"Execution Error: {e}")
-            raise e
-
-        if "```mermaid" in final_response:
-            return final_response.split("```mermaid")[1].split("```")[0].strip()
-        if "```" in final_response:
-            parts = final_response.split("```")
-            if len(parts) >= 2:
-                return parts[1].strip()
-
-        logger.warning("⚠️ No mermaid block found in final response.")
-        return final_response
 
