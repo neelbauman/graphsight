@@ -96,6 +96,12 @@ Image size: {img_w}x{img_h} pixels.
 - **Do NOT use the node ID as the label.** (e.g. If a node contains "Select Option", ID="A", Label="Select Option". NOT Label="A", NOT Label="SO").
 - Use generic shapes (rect, diamond, etc.) that match the visual.
 
+**CRITICAL RULES for Actor/Role Extraction:**
+- **Swimlanes:** If the diagram has swimlanes (columns/rows), identify the header text. Assign that header to the 'actor' field for all nodes in that lane.
+- **Colors:** If nodes are color-coded by role (e.g., Blue=User, Green=System), infer the actor name if a legend exists or from context.
+- **Icons:** If an icon accompanies the node (e.g., Person, DB), use it to infer the actor.
+- If no specific actor is indicated, leave 'actor' as null.
+
 **CRITICAL RULES for Edges:**
 - Ensure source and destination IDs strictly match the Nodes you defined.
 - Capture edge labels (e.g. "Yes", "No") if present.

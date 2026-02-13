@@ -11,6 +11,10 @@ class Node(BaseModel):
     shape: Literal["rect", "diamond", "round", "stadium", "hex", "circle"] = Field(
         "rect", description="Visual shape of the node."
     )
+    actor: Optional[str] = Field(
+        None, 
+        description="The actor, role, or swimlane responsible for this node (e.g. 'User', 'System')."
+    )
 
 class Edge(BaseModel):
     """グラフのエッジ"""
@@ -58,10 +62,16 @@ class GraphStructure(BaseModel):
         d.removed_nodes = {nid: self.nodes[nid] for nid in self_ids - other_ids}
 
         for nid in self_ids & other_ids:
-            if self.nodes[nid].label != other.nodes[nid].label:
-                d.changed_labels[nid] = (self.nodes[nid].label, other.nodes[nid].label)
-            if self.nodes[nid].shape != other.nodes[nid].shape:
-                d.changed_shapes[nid] = (self.nodes[nid].shape, other.nodes[nid].shape)
+            n1 = self.nodes[nid]
+            n2 = other.nodes[nid]
+            
+            if n1.label != n2.label:
+                d.changed_labels[nid] = (n1.label, n2.label)
+            if n1.shape != n2.shape:
+                d.changed_shapes[nid] = (n1.shape, n2.shape)
+            # --- 追加: Actorの変更検知 ---
+            if n1.actor != n2.actor:
+                d.changed_actors[nid] = (n1.actor, n2.actor)
 
         # Edge differences
         # EdgeはIDを持たないため、(src, dst) のペアで同一性を判定（多重エッジは簡易比較）
@@ -77,16 +87,39 @@ class GraphStructure(BaseModel):
         return d
 
     def to_mermaid(self) -> str:
-        """GraphStructureからMermaidコードを再生成"""
+        """GraphStructureからMermaidコードを再生成 (Swimlane対応)"""
         lines = [f"graph {self.direction}"]
         
-        # ノード定義
+        # --- Actorごとのグルーピング処理 ---
+        nodes_by_actor: Dict[str, List[Node]] = {}
+        no_actor_nodes: List[Node] = []
+        
         for node in self.nodes.values():
+            if node.actor:
+                if node.actor not in nodes_by_actor:
+                    nodes_by_actor[node.actor] = []
+                nodes_by_actor[node.actor].append(node)
+            else:
+                no_actor_nodes.append(node)
+        
+        # Subgraphs (Swimlanes) の生成
+        # 一意なIDを振るためにカウンターを使用
+        sg_counter = 1
+        for actor_name, nodes in nodes_by_actor.items():
+            # Actor名のエスケープ（簡易的）
+            safe_actor_name = actor_name.replace('"', "'")
+            lines.append(f"    subgraph sg_{sg_counter} [\"{safe_actor_name}\"]")
+            for node in nodes:
+                lines.append(f"        {self._node_str(node)}")
+            lines.append("    end")
+            sg_counter += 1
+            
+        # Actorなしノードの定義
+        for node in no_actor_nodes:
             lines.append(f"    {self._node_str(node)}")
             
         # エッジ定義
         for edge in self.edges:
-            # エッジ定義時にノードが存在しない場合の安全策は？ -> GraphStructure生成時に保証されている前提
             if edge.label:
                 lines.append(f"    {edge.src} {edge.style}|{edge.label}| {edge.dst}")
             else:
@@ -117,6 +150,7 @@ class GraphDiff(BaseModel):
     removed_nodes: Dict[str, Node] = Field(default_factory=dict)
     changed_labels: Dict[str, Tuple[str, str]] = Field(default_factory=dict)
     changed_shapes: Dict[str, Tuple[str, str]] = Field(default_factory=dict)
+    changed_actors: Dict[str, Tuple[Optional[str], Optional[str]]] = Field(default_factory=dict)
     added_edges: List[Edge] = Field(default_factory=list)
     removed_edges: List[Edge] = Field(default_factory=list)
 
@@ -125,6 +159,7 @@ class GraphDiff(BaseModel):
         return not any([
             self.added_nodes, self.removed_nodes,
             self.changed_labels, self.changed_shapes,
+            self.changed_actors,
             self.added_edges, self.removed_edges
         ])
 
@@ -138,6 +173,8 @@ class GraphDiff(BaseModel):
             parts.append(f"RELABEL {nid}: '{old}' → '{new}'")
         for nid, (old, new) in self.changed_shapes.items():
             parts.append(f"RESHAPE {nid}: {old} → {new}")
+        for nid, (old, new) in self.changed_actors.items():
+            parts.append(f"REASSIGN {nid}: Actor '{old}' → '{new}'")
         for e in self.added_edges:
             parts.append(f"ADD edge {e.src} → {e.dst}")
         for e in self.removed_edges:
