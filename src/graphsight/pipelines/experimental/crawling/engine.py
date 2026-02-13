@@ -10,14 +10,14 @@ import os
 from beautyspot import Spot
 from loguru import logger
 from typing import List, Dict, Set, Optional, Tuple, NamedTuple
-from ..strategies.base import BaseStrategy
-from ..llm.base import BaseVLM
-from ..models import DiagramResult, Focus, TokenUsage, StepInterpretation, ConnectedNode
-from ..utils.image import add_grid_overlay
+from .strategies.base import BaseStrategy
+from .llm.base import BaseVLM
+from .models import DiagramResult, Focus, TokenUsage, StepInterpretation, ConnectedNode
+from .utils.image import add_grid_overlay
 
 # 監査タスクを管理する構造体
 class AuditTask(NamedTuple):
-    index: int
+    idx: int
     step: StepInterpretation
     proposed_in: List[str]
     proposed_out: List[str]
@@ -324,7 +324,7 @@ class GraphInterpreter:
 
             if reasons:
                 tasks.append(AuditTask(
-                    index=i, step=step, proposed_in=list(logic_in), proposed_out=list(logic_out), reasons=reasons
+                    idx=i, step=step, proposed_in=list(logic_in), proposed_out=list(logic_out), reasons=reasons
                 ))
         return tasks
 

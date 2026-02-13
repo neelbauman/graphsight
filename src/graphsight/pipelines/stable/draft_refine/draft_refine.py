@@ -48,7 +48,7 @@ from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage, SystemMessage
 from loguru import logger
 
-from graphsight.agent.tools import ImageProcessor
+from .tools import ImageProcessor
 
 
 # =============================================================================
