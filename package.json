@@ -1,0 +1,10 @@
+{
+  "name": "graphsight-bridge",
+  "version": "1.0.0",
+  "description": "Bridge for parsing Mermaid diagrams using the official library",
+  "type": "module",
+  "dependencies": {
+    "jsdom": "^24.0.0",
+    "mermaid": "^10.9.0"
+  }
+}

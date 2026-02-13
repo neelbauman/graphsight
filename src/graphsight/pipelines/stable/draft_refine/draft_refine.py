@@ -56,8 +56,9 @@ from .models import (
     Edge,
     GraphStructure,
     UncertainPoint,
-    DraftResult,
+    DraftOutput,
 )
+from graphsight.bridge.client import NodeMermaidBridge
 
 
 class DraftRefinePipeline(BasePipeline):
@@ -86,9 +87,22 @@ class DraftRefinePipeline(BasePipeline):
                      f"{len(draft.uncertain_points)} uncertain points")
 
         # ドラフトをグラフ構造にパース（検証用）
-        draft_graph = MermaidParser.parse(draft.mermaid_code)
-        logger.info(f"   Parsed: {len(draft_graph.nodes)} nodes, "
-                     f"{len(draft_graph.edges)} edges")
+        try:
+            parsed_data = NodeMermaidBridge.parse(draft.mermaid_code)
+            
+            # JSONデータをGraphStructureモデルに変換
+            draft_graph = GraphStructure(
+                direction=parsed_data.get("direction", "TD"),
+                nodes={n["id"]: Node(**n) for n in parsed_data["nodes"]},
+                edges=[Edge(**e) for e in parsed_data["edges"]]
+            )
+            logger.info(f"   Parsed: {len(draft_graph.nodes)} nodes, "
+                         f"{len(draft_graph.edges)} edges")
+        except Exception as e:
+            logger.error(f"Failed to parse Mermaid with Node bridge: {e}")
+            # フォールバック処理を入れるか、エラーで落とすか
+            # ここではエラーとして返す
+            return f"Error parsing draft: {e}"
 
         # 確信度が十分高ければRefineスキップ
         if draft.confidence >= 0.95 and not draft.uncertain_points:
@@ -108,7 +122,7 @@ class DraftRefinePipeline(BasePipeline):
     # Phase 1: Draft — 全体画像からMermaid一発生成 + 自己レビュー
     # -----------------------------------------------------------------
 
-    def _phase_draft(self, image_path: str, img_w: int, img_h: int) -> DraftResult:
+    def _phase_draft(self, image_path: str, img_w: int, img_h: int) -> DraftOutput:
         logger.info("=" * 50 + " Phase 1: DRAFT")
 
         image_content = self._load_image(image_path)
@@ -144,7 +158,9 @@ Output ONLY this JSON (no other text):
 - Use actual newlines (\\n) to separate lines.
 - Reproduce the flowchart structure as accurately as possible.
 - For unclear labels, write your best guess.
-- **CRITICAL: Transcribe the text inside the node exactly. Do NOT use the node ID as the label. (e.g. Write A[Select Option], NOT A[A], NOT A[SO])**
+- Use double quote for label. (e.g. Write A["Some node (extra)"], NOT A[Any Node])
+- Double quote IN (not arround) label must be written as `&quot;`. (e.g. A["Some node about &quot;Bob&quot;"])
+- **CRITICAL: Transcribe the text inside the node exactly. Do NOT use the node ID as the label. (e.g. Write A["Select Option"], NOT A[A], NOT A[SO])**
 
 **Rules for uncertain_points:**
 - List ONLY genuinely uncertain items (unclear if Edge label or Node, complex lines, faint lines, ambiguous connections).
@@ -167,7 +183,7 @@ Output ONLY this JSON (no other text):
             logger.warning(f"Draft JSON parse failed: {e}")
             # JSONパース失敗 → Mermaid直接抽出を試みる
             mermaid = self._extract_mermaid(response.content)
-            return DraftResult(mermaid_code=mermaid, confidence=0.5)
+            return DraftOutput(mermaid_code=mermaid, confidence=0.5)
 
         mermaid_raw = data.get("mermaid", "")
         # エスケープされた改行を実際の改行に変換
@@ -193,7 +209,7 @@ Output ONLY this JSON (no other text):
         for u in uncertain_points:
             logger.info(f"   ❓ {u.id}: {u.description}")
 
-        return DraftResult(
+        return DraftOutput(
             mermaid_code=mermaid_code,
             confidence=confidence,
             uncertain_points=uncertain_points
@@ -204,7 +220,7 @@ Output ONLY this JSON (no other text):
     # -----------------------------------------------------------------
 
     def _phase_refine(self, image_path: str, img_w: int, img_h: int,
-                      draft: DraftResult, draft_graph: GraphStructure) -> str:
+                      draft: DraftOutput, draft_graph: GraphStructure) -> str:
         logger.info("=" * 50 + " Phase 2: REFINE")
 
         if not draft.uncertain_points:
