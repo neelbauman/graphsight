@@ -1,3 +1,6 @@
-from .draft_refine import DraftRefinePipeline
+# src/graphsight/pipelines/stable/draft_refine/__init__.py
 
-__all__ = ["DraftRefinePipeline"]
+from .draft_refine import DraftRefinePipeline as StandardPipeline
+from .draft_refine_structured import DraftRefinePipeline as StructuredPipeline
+
+__all__ = ["StandardPipeline", "StructuredPipeline"]

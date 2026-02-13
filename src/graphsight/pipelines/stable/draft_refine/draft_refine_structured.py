@@ -15,7 +15,7 @@ from graphsight.models import TokenUsage
 
 from .models import (
     GraphStructure,
-    DraftOutput,
+    DraftOutputStructured,
     UncertainPoint,
     CheckResult,    # Need to add to models.py
     CorrectionPlan, # Need to add to models.py
@@ -78,7 +78,7 @@ class DraftRefinePipeline(BasePipeline):
     # -----------------------------------------------------------------
     # src/graphsight/pipelines/stable/draft_refine/draft_refine.py の _phase_draft メソッドのみ抜粋
 
-    def _phase_draft(self, image_path: str, img_w: int, img_h: int) -> tuple[DraftOutput, TokenUsage]:
+    def _phase_draft(self, image_path: str, img_w: int, img_h: int) -> tuple[DraftOutputStructured, TokenUsage]:
         logger.info("=" * 50 + " Phase 1: DRAFT (Structured)")
 
         # 元のプロンプトの精神を継承しつつ、Structured Outputに最適化
@@ -114,7 +114,7 @@ Image size: {img_w}x{img_h} pixels.
         result, usage = self.vlm.query_structured(
             prompt=prompt,
             image_path=image_path,
-            response_model=DraftOutput
+            response_model=DraftOutputStructured
         )
         
         logger.info(f"   Tokens used: {usage.total_tokens}")

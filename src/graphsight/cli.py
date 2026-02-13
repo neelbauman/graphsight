@@ -3,7 +3,7 @@ from enum import Enum
 from pathlib import Path
 
 # Pipelines
-from .pipelines.stable.draft_refine import DraftRefinePipeline
+from .pipelines.stable.draft_refine import StandardPipeline, StructuredPipeline
 # from .pipelines.experimental.agentic import AgenticPipeline
 # from .pipelines.experimental.ensemble import EnsemblePipeline
 # from .pipelines.experimental.crawling import CrawlingPipeline # 必要ならimport
@@ -13,6 +13,7 @@ app = typer.Typer()
 class PipelineType(str, Enum):
     # Stable
     STANDARD = "standard"  # Default (Draft-Refine)
+    STRUCTURED = "structured"
     
     # Experimental
     EXP_AGENT = "exp-agent"
@@ -32,7 +33,7 @@ def parse_cmd(
     pipeline: PipelineType = typer.Option(
         PipelineType.STANDARD, 
         "--pipeline", "-p",
-        help="Select processing logic. 'exp-' options are experimental."
+        help="Select processing logic. 'structured' uses JSON mode. 'exp-' options are experimental."
     ),
 ):
     """
@@ -49,7 +50,12 @@ def parse_cmd(
     # Pipeline Factory
     try:
         if pipeline == PipelineType.STANDARD:
-            runner = DraftRefinePipeline(model=model)
+            typer.secho("🔧 Using Standard Pipeline (Text/Diff based)", fg=typer.colors.BLUE)
+            runner = StandardPipeline(model=model)
+        elif pipeline == PipelineType.STRUCTURED:
+            # Structured Output版
+            typer.secho("🧱 Using Structured Pipeline (Pydantic based)", fg=typer.colors.CYAN)
+            runner = StructuredPipeline(model=model)
         elif pipeline == PipelineType.EXP_AGENT:
             # runner = AgenticPipeline(model=model)
             pass

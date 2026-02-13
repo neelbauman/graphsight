@@ -5,9 +5,6 @@ from typing import Optional, Literal
 from dotenv import load_dotenv
 from loguru import logger
 
-# New Pipeline Architecture
-from .pipelines.stable.draft_refine import DraftRefinePipeline
-
 # Experimental Pipelines (必要に応じてコメントアウトを外して使えるように準備)
 # from .pipelines.experimental.agentic import AgenticPipeline
 # from .pipelines.experimental.ensemble import EnsemblePipeline
