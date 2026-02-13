@@ -1,13 +1,12 @@
 """
 GraphSight Agent v6 — Draft → Refine Architecture (Structural Diff Edition)
 
-v5からの変更点:
-  - GraphStructure / Node / Edge / GraphDiff データモデル追加
-  - MermaidParser: LLM出力のMermaidをグラフ構造にパース
-  - Refineフェーズを構造的差分適用に変更:
-      LLMに「Mermaidを書き直して」ではなく「グラフ操作コマンド」を出力させ、
-      プログラム的に適用する。修正対象以外のノード・エッジは一切触らない。
-  - crop座標にマージン追加（見切れ防止）
+- GraphStructure / Node / Edge / GraphDiff データモデル追加
+- MermaidParser: LLM出力のMermaidをグラフ構造にパース
+- Refineフェーズを構造的差分適用に変更:
+  LLMに「Mermaidを書き直して」ではなく「グラフ操作コマンド」を出力させ、
+  プログラム的に適用する。修正対象以外のノード・エッジは一切触らない。
+- crop座標にマージン追加（見切れ防止）
 
 設計思想:
   LLMは全体画像を見て一発でMermaidを書くのが一番精度が高い。

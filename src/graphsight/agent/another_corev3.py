@@ -1,17 +1,4 @@
 """
-GraphSight Agent v9 — Union Strategy (High Recall Edition)
-
-Concept:
-  1. Generate 3 drafts (Optimist, Pessimist, Structuralist).
-  2. Normalize IDs using LLM (map everyone to Structuralist's semantic IDs).
-  3. UNION MERGE:
-     - If Node X is found in ANY draft, add it.
-     - If Edge A->B is found in ANY draft, add it.
-     - Priority for Labels: Structuralist > Optimist > Pessimist.
-
-Dependencies:
-  - langchain_openai
-  - loguru
 """
 
 import base64
