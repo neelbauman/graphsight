@@ -1,6 +1,7 @@
 from typing import List, Literal, Dict, Optional, Tuple, Set
 from enum import Enum
 from pydantic import BaseModel, Field, model_validator
+from graphsight.llm.config import spot
 
 
 # --- 基本要素モデル ---
@@ -203,6 +204,11 @@ class DraftOutput(BaseModel):
     confidence: float = Field(..., description="Overall confidence (0.0-1.0)")
     uncertain_points: List[UncertainPoint] = Field(default_factory=list)
 
+@spot.register(
+    code=10,
+    encoder=lambda x: x.model_dump(),
+    decoder=lambda x: DraftOutputStructured.model_validate(x),
+)
 class DraftOutputStructured(BaseModel):
     """DraftフェーズのLLM最終出力"""
     graph: GraphSchema
@@ -217,6 +223,11 @@ class RefineVerdict(str, Enum):
     UNCLEAR = "unclear"       # 画像が不鮮明で判断できない
 
 
+@spot.register(
+    code=20,
+    encoder=lambda x: x.model_dump(),
+    decoder=lambda x: CheckResult.model_validate(x),
+)
 class CheckResult(BaseModel):
     """Refineフェーズ: 監査結果"""
     

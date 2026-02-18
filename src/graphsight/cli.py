@@ -6,7 +6,8 @@ from pathlib import Path
 from .pipelines.stable.draft_refine import StandardPipeline, StructuredPipeline
 # from .pipelines.experimental.agentic import AgenticPipeline
 # from .pipelines.experimental.ensemble import EnsemblePipeline
-# from .pipelines.experimental.crawling import CrawlingPipeline # 必要ならimport
+# CrawlingPipelineのインポートを有効化
+from .pipelines.experimental.crawling.pipeline import CrawlingPipeline
 
 app = typer.Typer()
 
@@ -63,9 +64,9 @@ def parse_cmd(
             # runner = EnsemblePipeline(model=model)
             pass
         elif pipeline == PipelineType.EXP_CRAWL:
-            # runner = CrawlingPipeline(model=model)
-            typer.secho("Experimental Crawl pipeline is under maintenance.", fg=typer.colors.RED)
-            raise typer.Exit(code=1)
+            # Crawler Pipelineの有効化
+            typer.secho("🕸️  Using Experimental Crawling Pipeline (GraphInterpreter)", fg=typer.colors.MAGENTA)
+            runner = CrawlingPipeline(model=model)
         
         typer.echo(f"🤖 Analyzing {image_path}...")
         mermaid_code = runner.run(image_path)

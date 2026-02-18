@@ -28,14 +28,14 @@ MODEL_REGISTRY = {
         model_type=ModelType.RECOGNITION,
         input_price_per_m=2.50,
         output_price_per_m=10.00,
-        default_params={"temperature": 0.0, "max_tokens": 4096}
+        default_params={"temperature": 0.0, "max_tokens": 8192}
     ),
-    "gpt-4o-mini": ModelConfig(
-        name="gpt-4o-mini",
+    "gpt-4.1": ModelConfig(
+        name="gpt-4.1-2025-04-14",
         model_type=ModelType.RECOGNITION,
-        input_price_per_m=0.15,
-        output_price_per_m=0.60,
-        default_params={"temperature": 0.0}
+        input_price_per_m=1.5,
+        output_price_per_m=8.0,
+        default_params={"temperature": 0.0, "max_tokens": 8192}
     ),
     # 将来的なモデルの例 (temperature不可、reasoning_effort指定)
     "gpt-5": ModelConfig(
