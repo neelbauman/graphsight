@@ -1,4 +1,5 @@
 from typing import List, Literal, Dict, Optional, Tuple, Set
+from enum import Enum
 from pydantic import BaseModel, Field, model_validator
 
 
@@ -209,11 +210,31 @@ class DraftOutputStructured(BaseModel):
     uncertain_points: List[UncertainPoint] = Field(default_factory=list)
 
 
+
+class RefineVerdict(str, Enum):
+    CORRECT = "correct"       # ドラフトは正しい
+    INCORRECT = "incorrect"   # ドラフトは間違っている
+    UNCLEAR = "unclear"       # 画像が不鮮明で判断できない
+
+
 class CheckResult(BaseModel):
-    """Refineフェーズ: 個別の疑問点確認結果"""
-    readable: bool = Field(..., description="Is the text/connection clearly visible?")
-    finding: str = Field(..., description="What you actually see in the crop.")
-    correction: str = Field(..., description="Specific correction needed, or 'none' if draft was correct.")
+    """Refineフェーズ: 監査結果"""
+    
+    # Step 1: 客観的な観察 (バイアスなしで記述させる)
+    observation: str = Field(..., description="Describe EXACTLY what is visible in the crop text/shapes. Do not judge correctness yet.")
+    
+    # Step 2: 判定 (ここで 'correct' を選ぶ余地を与える)
+    verdict: RefineVerdict = Field(..., description="Compare observation with draft. Choose 'correct' if they match or if the difference is trivial.")
+    
+    # Step 3: 修正値 (判定が incorrect の時だけ記入)
+    correction_value: Optional[str] = Field(None, description="Provide the correct value ONLY if verdict is 'incorrect'. Otherwise null.")
+    
+    @model_validator(mode='after')
+    def validate_consistency(self):
+        if self.verdict == RefineVerdict.CORRECT and self.correction_value:
+            # 矛盾がある場合は修正値を破棄して判定を優先（またはその逆）
+            self.correction_value = None
+        return self
 
 
 class GraphOperation(BaseModel):

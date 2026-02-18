@@ -8,6 +8,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 # Note: ImageProcessor is likely a LangChain tool, so we keep using it as is, 
 # or we could migrate it to a standalone function if desired.
 from .tools import ImageProcessor 
+from .agent import InspectorAgent
 
 from graphsight.pipelines.base import BasePipeline
 from graphsight.llm.openai_client import OpenAIVLM  # Use our wrapper
@@ -19,6 +20,7 @@ from .models import (
     UncertainPoint,
     CheckResult,    # Need to add to models.py
     CorrectionPlan, # Need to add to models.py
+    RefineVerdict,
 )
 
 class DraftRefinePipeline(BasePipeline):
@@ -89,7 +91,7 @@ Image size: {img_w}x{img_h} pixels.
 **TASK:**
 1. Analyze the flowchart structure as if you were writing a Mermaid diagram.
 2. Extract all Nodes and Edges into the structured format.
-3. Honestly assess your uncertainty.
+3. Honestly assess your uncertainty fairly, But be Confident your work.
 
 **CRITICAL RULES for Nodes:**
 - **Transcribe the text inside the node EXACTLY.**
@@ -120,7 +122,7 @@ Image size: {img_w}x{img_h} pixels.
         result, usage = self.vlm.query_structured(
             prompt=prompt,
             image_path=image_path,
-            response_model=DraftOutputStructured
+            response_model=DraftOutputStructured,
         )
         
         logger.info(f"   Tokens used: {usage.total_tokens}")
@@ -143,10 +145,19 @@ Image size: {img_w}x{img_h} pixels.
         # Limit checks
         to_check = uncertain_points[:self.MAX_REFINE_CHECKS]
 
+        inspector = InspectorAgent(model_name=self.model_name)
+
         # 1. Visual Verification (Loop)
         for u in to_check:
             logger.info(f"   🔍 Checking {u.id}: {u.description}")
-            u.resolution = self._check_uncertain_point(image_path, img_w, img_h, u)
+            try:
+                # エージェントに調査を委譲
+                u.resolution = inspector.verify_point(image_path, u, graph)
+                logger.info(f"      ✅ Resolution: {u.resolution}")
+            except Exception as e:
+                logger.error(f"      ❌ Agent failed: {e}")
+                u.resolution = "Agent error (skipping)"
+
             logger.info(f"      ✅ {u.resolution}")
 
         # 2. Filter corrections
@@ -280,8 +291,7 @@ Visual Corrections to Apply:
     # Helpers
     # -----------------------------------------------------------------
 
-    def _check_uncertain_point(self, image_path: str, img_w: int, img_h: int, 
-                               point: UncertainPoint) -> str:
+    def _check_uncertain_point(self, image_path: str, img_w: int, img_h: int, point: UncertainPoint, graph: GraphStructure) -> str:
         """Crop and verify using Structured Output"""
         
         # Calculate Crop
@@ -296,32 +306,50 @@ Visual Corrections to Apply:
         crop_path = ImageProcessor.crop_region.invoke({
             "image_path": image_path,
             "x": crop_x, "y": crop_y,
-            "w": crop_w, "h": crop_h
+            "w": crop_w, "h": crop_h,
+            "preprocess": "binarize",
         })
         
         if isinstance(crop_path, str) and crop_path.startswith("Error"):
             return f"Crop failed: {crop_path}"
 
-        # Verify
-        prompt = f"""Verify a specific part of a flowchart.
-Question: {point.description}
-Location: {point.location}
+        context_nodes = ", ".join([f"{n.id}[{n.label}]" for n in graph.nodes.values()])
 
-Output finding and necessary correction.
+        # Verify
+        prompt = f"""You are an Objective Auditor validating a flowchart digitization.
+
+**Context (Draft Interpretation):**
+The draft currently sees: {context_nodes}
+
+**Focus Area:**
+"{point.description}"
+
+**TASK:**
+Compare the crop image against the draft interpretation.
+
+**GUIDELINES FOR AUDIT:**
+1. **Presume Innocence:** The draft is likely correct. Only mark it as 'False' if you see **undeniable evidence** of an error.
+2. **Ambiguity:** If the image is blurry or ambiguous, trust the draft (set draft_matches_image=True). Do NOT guess.
+3. **Minor Diff:** Ignore minor stylistic differences or trivial punctuation changes unless they alter meaning.
+4. **Correction:** Provide a correction ONLY if you are 100% certain.
+
+Output your audit result honestly.
 """
+
         try:
             result, _ = self.vlm.query_structured(
                 prompt=prompt,
                 image_path=crop_path,
                 response_model=CheckResult
             )
-            
-            # 読めない場合のEnhance処理は省略（必要なら追加実装）
-            # ここではシンプルに結果を返す
-            if result.correction and result.correction.lower() != "none":
-                return f"{result.finding} → Correction: {result.correction}"
+
+            # Logic: Only accept correction if Verdict is INCORRECT
+            if result.verdict == RefineVerdict.INCORRECT and result.correction_value:
+                return f"{result.observation} → Correction: {result.correction_value}"
+            elif result.verdict == RefineVerdict.UNCLEAR:
+                return f"{result.observation} (Unclear, keeping draft)"
             else:
-                return f"{result.finding} (draft was correct)"
+                return f"{result.observation} (Verified Correct)"
                 
         except Exception as e:
             return f"Verification error: {e}"
